@@ -1,0 +1,36 @@
+<configuration>
+    <appender name="STDOUT"
+              class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <appender name="KIFILE" class="ch.qos.logback.core.FileAppender">
+        <file>kinterest.log</file>
+        <encoder>
+            <pattern>%date %.-1level [%thread] %logger{10} [%file : %line] %M: %msg%n</pattern>
+        </encoder>
+    </appender>
+
+
+    <logger name="info.kinterest" level="DEBUG">
+        <appender-ref ref="KIFILE"/>
+    </logger>
+    <logger name="info.kinterest.datastores.mongo.MongoDatastore" level="TRACE" />
+    <logger name="info.kinterest.datastores.hazelcast.HazelcastDatastore" level="TRACE" />
+    <logger name="info.kinterest.datastores.tests.ChannelListener" level="TRACE" />
+    <logger name="info.kinterest.datastores.tests.EventsTest" level="TRACE" />
+    <logger name="info.kinterest.datastore.EventManager" level="TRACE" />
+    <logger name="info.kinterest.datastores.tests.containers.MongoClusterContainer" level="TRACE" />
+
+    <root level="DEBUG">
+        <appender-ref ref="STDOUT" />
+    </root>
+
+    <logger name="org.testcontainers" level="INFO"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+
+</configuration>
