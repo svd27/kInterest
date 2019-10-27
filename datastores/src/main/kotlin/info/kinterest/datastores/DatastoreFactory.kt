@@ -16,8 +16,8 @@ class DatastoreFactory(val events:EventManager) {
     var configs : MutableMap<String,FactoryConfig> = mutableMapOf()
 
     init {
-        val configResources = this::class.java.classLoader.getResources("datastore.conf")
-        configResources.asIterator().forEach {
+        val configResources = null
+        this::class.java.classLoader.getResources("datastore.conf").asSequence().forEach {
             log.debug { "found conf" }
             addConfig(it.readText())
         }

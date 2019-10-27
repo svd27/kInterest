@@ -20,10 +20,10 @@ import org.spekframework.spek2.style.specification.describe
 class MongoEmbedTest: Spek({
     beforeGroup { setUpMongo() }
     val log = KotlinLogging.logger {}
-    val mongoCfg : MongoConfig = MongoConfig("test", "localhost", 27027)
+    val mongodatastoreCfg : MongodatastoreConfig = MongodatastoreConfig("test", "localhost", 27027)
 
     describe("connecting to an embedded mongo") {
-        val ds = MongoDatastore(mongoCfg, object : EventManager {
+        val ds = MongoDatastore(mongodatastoreCfg, object : EventManager {
             override val datastore: BroadcastChannel<DatastoreEvent> = BroadcastChannel(10)
             override var entityChannels: Map<KIEntityMeta, BroadcastChannel<EntitiesEvent>> = mapOf()
             override val mutex: Mutex = Mutex()

@@ -66,7 +66,12 @@ class HazelcastClusterContainer(val version:String="latest") : ScopeCloseable {
         }
 
         containers = listOf(m1, m2, m3)
-        val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().addAddress("${m1.containerIpAddress}:${m1.firstMappedPort}")))
+        val client = HazelcastClient.newHazelcastClient(
+                ClientConfig().setNetworkConfig(ClientNetworkConfig()
+                        .addAddress("${m1.containerIpAddress}:${m1.firstMappedPort}")
+                        .addAddress("${m2.containerIpAddress}:${m2.firstMappedPort}")
+                        .addAddress("${m3.containerIpAddress}:${m3.firstMappedPort}")
+                ))
         log.info {"name: ${client.distributedObjects}"}
         val al = client.cpSubsystem.getAtomicLong("amen")
         al.set(1)
@@ -77,6 +82,8 @@ class HazelcastClusterContainer(val version:String="latest") : ScopeCloseable {
 
     val host = containers.first().containerIpAddress
     val port = containers.first().firstMappedPort
+
+    val addresses : List<String> = containers.map { "${it.containerIpAddress}:${it.firstMappedPort}" }
 
     override fun close() {
         log.info { "closing Hazelcast" }

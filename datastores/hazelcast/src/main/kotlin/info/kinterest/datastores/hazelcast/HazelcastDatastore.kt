@@ -2,6 +2,8 @@ package info.kinterest.datastores.hazelcast
 
 import com.beust.klaxon.Klaxon
 import com.hazelcast.client.HazelcastClient
+import com.hazelcast.client.config.ClientConfig
+import com.hazelcast.client.config.ClientNetworkConfig
 import com.hazelcast.core.HazelcastJsonValue
 import com.hazelcast.core.IMap
 import com.hazelcast.query.Predicate
@@ -21,8 +23,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mu.KotlinLogging
 
-class HazelcastConfig(name: String, config : Map<String,Any>) : DatastoreConfig("hazelcast", name, config) {
+class HazelcastConfig(name: String, config : Map<String,Any>) : DatastoreConfig(TYPE, name, config) {
+    constructor(name:String, addresses : List<String>) : this(name, mapOf("addresses" to addresses))
 
+    val addresses : List<String> by config
+
+    companion object {
+        const val TYPE = "hazelcast"
+    }
 }
 
 
@@ -31,7 +39,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
     val log = KotlinLogging.logger {  }
     override val name: String = cfg.name
 
-    val client = HazelcastClient.newHazelcastClient()
+    val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply { addresses = cfg.addresses }))
     val dbLock : Mutex = Mutex()
     val collections = mutableMapOf<KIEntityMeta, IMap<Any,HazelcastJsonValue>>()
     val metas : MutableMap<String,KIEntityMeta> = mutableMapOf()

@@ -8,7 +8,7 @@ import info.kinterest.datastore.EventManager
 import info.kinterest.datastores.DatastoreFactory
 import info.kinterest.datastores.dataStoresKodein
 import info.kinterest.datastores.hazelcast.HazelcastConfig
-import info.kinterest.datastores.mongo.MongoConfig
+import info.kinterest.datastores.mongo.MongodatastoreConfig
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.junit.jupiter.api.*
@@ -34,7 +34,7 @@ class DatastoreFactoryTest : KodeinAware {
             import(kodeinHazelcast)
             bind<DatastoreConfig>("ds1") with scoped(TestScope).singleton {
                 val mongodProcess = instance<MongodProcess>()
-                MongoConfig("ds1", "localhost", 27027)
+                MongodatastoreConfig("ds1", "localhost", 27027)
             }
 
             bind<DatastoreConfig>("ds2") with scoped(TestScope).singleton {

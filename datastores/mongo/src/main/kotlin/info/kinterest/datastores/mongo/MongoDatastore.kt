@@ -1,7 +1,6 @@
 package info.kinterest.datastores.mongo
 
 import com.mongodb.TransactionOptions
-import com.mongodb.client.model.Filters
 import com.mongodb.client.model.Filters.*
 import com.mongodb.client.model.Projections.include
 import com.mongodb.reactivestreams.client.ClientSession
@@ -31,11 +30,10 @@ import kotlinx.coroutines.sync.withLock
 import mu.KotlinLogging
 import org.bson.Document
 import org.bson.types.ObjectId
-import javax.print.Doc
 
 
 @ExperimentalCoroutinesApi
-class MongoDatastore(cfg: MongoConfig, events: EventManager) : AbstractDatastore(cfg, events) {
+class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : AbstractDatastore(cfg, events) {
     val log = KotlinLogging.logger {  }
     override val name: String = cfg.name
     internal val mongoClient = MongoClients.create(cfg.asConnectionString().apply { log.debug { "client on $this" } })
