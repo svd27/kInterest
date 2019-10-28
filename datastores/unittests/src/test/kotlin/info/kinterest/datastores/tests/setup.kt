@@ -1,5 +1,10 @@
 package info.kinterest.datastores.tests
 
+import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.command.DockerCmdExecFactory
+import com.github.dockerjava.core.DefaultDockerClientConfig
+import com.github.dockerjava.core.DockerClientBuilder
+import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import com.hazelcast.config.Config
 import com.hazelcast.core.Hazelcast
 import com.hazelcast.core.HazelcastInstance
@@ -18,6 +23,7 @@ import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.datastores.mongo.MongoDatastore
 import info.kinterest.datastores.tests.containers.HazelcastClusterContainer
 import info.kinterest.datastores.tests.containers.MongoClusterContainer
+import info.kinterest.docker.hazelcast.HazelcastCluster
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KotlinLogging
 import org.kodein.di.Kodein
@@ -51,14 +57,25 @@ val kodeinMongo = Kodein.Module(name = "mongo") {
 
 @ExperimentalCoroutinesApi
 val kodeinHazelcast = Kodein.Module("hazelcast") {
-    bind<HazelcastClusterContainer>() with scoped(TestScope).singleton {
-        HazelcastClusterContainer()
+    bind<DockerClient>() with singleton {
+        val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
+        val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
+                .withDockerHost("tcp://localhost:2375")
+                .withDockerTlsVerify(false)
+                .build()
+        DockerClientBuilder.getInstance(cfg)
+                .withDockerCmdExecFactory(cmds)
+                .build()
     }
 
 
+    bind<HazelcastCluster>() with scoped(TestScope).singleton {
+        HazelcastCluster(instance())
+    }
+
     bind<HazelcastConfig>() with multiton { name : String ->
-        val cluster : HazelcastClusterContainer = instance()
-        HazelcastConfig(name, cluster.addresses)
+        val cluster : HazelcastCluster = instance()
+        HazelcastConfig(name, cluster.ips)
     }
 
     bind<HazelcastDatastore>() with multiton { name : String ->

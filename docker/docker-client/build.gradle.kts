@@ -11,9 +11,20 @@ val spekVersion : String by project
 val junitVersion : String by project
 val coroutinesVersion : String by project
 val striktVersion : String by project
+val hazelcastVersion : String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
+    implementation(project(":core:common"))
+    implementation("org.dom4j:dom4j:2.1.1")
+    implementation("jaxen:jaxen:1.1.6")
+    implementation("javax.xml.stream:stax-api:1.0-2")
+    implementation("net.java.dev.msv:xsdlib:2013.6.1")
+    implementation("javax.xml.bind:jaxb-api:2.2.12")
+    implementation("pull-parser:pull-parser:2")
+    implementation("xpp3:xpp3:1.1.4c")
+
+
     implementation("io.github.microutils:kotlin-logging:1.7.6")
     implementation("ch.qos.logback:logback-classic:1.2.3")
     implementation("com.github.docker-java:docker-java:3.2.0-rc1")
@@ -23,11 +34,11 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
-    testImplementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:2.2.0")
-    kaptTest(project(":core:generator", "default"))
     testImplementation(platform("io.strikt:strikt-bom:$striktVersion"))
     testImplementation("io.strikt:strikt-java-time")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
+    testImplementation("org.mongodb:mongodb-driver-reactivestreams:1.12.0")
+    testImplementation("com.hazelcast:hazelcast-client:$hazelcastVersion")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {

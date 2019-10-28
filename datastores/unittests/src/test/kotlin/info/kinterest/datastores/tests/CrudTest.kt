@@ -32,6 +32,7 @@ class CrudTest : KodeinAware {
     @BeforeAll
     fun beforeAll() {
         log.info { "before all" }
+
         TestScope.getRegistry(this)
         kodein = initKodein()
     }

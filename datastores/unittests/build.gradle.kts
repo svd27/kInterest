@@ -7,10 +7,10 @@ configurations.all {
     attributes.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class, Usage.JAVA_RUNTIME))
 }
 
-val spekVersion : String by project
-val junitVersion : String by project
-val coroutinesVersion : String by project
-val striktVersion : String by project
+val spekVersion: String by project
+val junitVersion: String by project
+val coroutinesVersion: String by project
+val striktVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
@@ -26,6 +26,7 @@ dependencies {
     kaptTest(project(":core:generator", "default"))
     implementation(project(":datastores:mongo", "default"))
     testImplementation(project(":datastores:hazelcast", "default"))
+    testImplementation(project(":docker:docker-client", "default"))
     testImplementation(platform("io.strikt:strikt-bom:$striktVersion"))
     testImplementation("io.strikt:strikt-java-time")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
@@ -44,7 +45,8 @@ kapt {
 
 
 tasks.test {
+    environment("DOCKER_HOST", "tcp://localhost:2375")
     useJUnitPlatform() {
-        includeEngines ("spek2", "junit-jupiter")
+        includeEngines("spek2", "junit-jupiter")
     }
 }

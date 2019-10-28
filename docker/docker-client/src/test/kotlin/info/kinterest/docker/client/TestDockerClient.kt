@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import java.io.Closeable
 import java.lang.Exception
+import java.nio.charset.Charset
+import java.util.concurrent.TimeUnit
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class TestDockerClient {
@@ -47,7 +49,7 @@ class TestDockerClient {
     }
 
     @Test
-    fun testCreate() {
+    fun testCreateNetwork() {
         val listResp = client.listNetworksCmd().withNameFilter("nw1").exec()
         log.info { listResp }
         val nws = if(listResp.isEmpty())
@@ -66,35 +68,50 @@ class TestDockerClient {
 
     @Test
     fun runTest() {
-        client.pullImageCmd("hazelcast/hazelcast:latest").exec(object : PullImageResultCallback() {
-            override fun onNext(item: PullResponseItem?) {
-                log.info { "image: $item"  }
-            }
+        val searchImagesCmdResp = client.searchImagesCmd("hazelcast").exec()
+        log.info {
+            searchImagesCmdResp.map { "${it.name} ${it.description}" }.joinToString("\n")
+        }
 
-            override fun onError(throwable: Throwable?) {
-                log.error(throwable) {}
-            }
-        })
-
-        val images = client.listImagesCmd().withImageNameFilter("hazelcast/hazelcast:latest").exec()
+        log.info { "listing..." }
+        val images = client.listImagesCmd().withImageNameFilter("hazelcast/hazelcast").exec()
         images.forEach {
-            log.info { "Image: ${it.id} $it" }
+            log.info { "Image: ${it.id} ${it.repoTags.toList()}" }
         }
-        val lcresp = client.listContainersCmd().withShowAll(true).withNameFilter(listOf("test1")).exec().apply {
-            log.info { "listContainers: ${this.size}: $this" }
+
+        if(images.none { it.repoTags.any { it == "hazelcast/hazelcast:latest" } }) {
+            log.info { "pulling" }
+            val picb = object : PullImageResultCallback() {
+                override fun onNext(item: PullResponseItem?) {
+                    log.info { "image: $item" }
+                }
+
+                override fun onError(throwable: Throwable?) {
+                    log.error(throwable) { "pull error" }
+                }
+            }
+            client.pullImageCmd("hazelcast/hazelcast").withTag("latest").exec(picb)
+            picb.awaitCompletion()
         }
-        val cid = if(lcresp.isEmpty())
-          client.createContainerCmd("hazelcast/hazelcast:latest").withName("test1").withExposedPorts(listOf(ExposedPort(5701))).exec().apply { log.info { this } }.id
-        else lcresp[0].id
+
+
+        val cid =  client.createContainerCmd("hazelcast/hazelcast:latest").withExposedPorts(listOf(ExposedPort(5701))).withTty(false).exec().apply { log.info { this } }.id
+
         log.info { "created ${cid}"  }
-        client.startContainerCmd("test").withContainerId(cid)
+        if(client.inspectContainerCmd(cid).exec().apply {
+            log.info { "${this.id} running ${state.running} health: ${state.health}" }
+        }.state?.running != true) {
+            client.startContainerCmd("").withContainerId(cid).exec()
+            log.info { "starting $cid" }
+        }
         val logCallback = object : LogContainerResultCallback() {
             override fun onNext(item: Frame?) {
-                log.info { item }
+                log.info { "log: $item" }
+                if(item!=null && item.toString().matches(".*is STARTED.*".toRegex()))
+                    log.info { "$item matches" }
             }
         }
-        client.logContainerCmd(cid).withStdOut(true).exec(logCallback)
-        logCallback.awaitStarted()
-        runBlocking { delay(8000) }
+        client.logContainerCmd(cid).withStdOut(true).withStdErr(true).withFollowStream(true).withSince(0).exec(logCallback)
+        logCallback.awaitCompletion(90, TimeUnit.SECONDS)
     }
 }
