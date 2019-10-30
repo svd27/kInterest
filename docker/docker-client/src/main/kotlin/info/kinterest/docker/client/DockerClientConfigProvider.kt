@@ -8,7 +8,7 @@ import com.github.dockerjava.core.DockerClientConfig
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 
 object DockerClientConfigProvider {
-    val localOverride : String? = "tcp://127.0.0.1:2375" //null
+    val localOverride : String? = null //"tcp://127.0.0.1:2375"
     fun config() : DockerClientConfig {
         val cfgb = DefaultDockerClientConfig.createDefaultConfigBuilder()
         val getenv = System.getenv("DOCKER_HOST")
