@@ -37,7 +37,6 @@ kapt {
 
 
 tasks.test {
-    environment("DOCKER_HOST", "tcp://localhost:2375")
     systemProperty("io.netty.tryReflectionSetAccessible", false)
     testLogging {
         events("failed", "skipped", "passed")
