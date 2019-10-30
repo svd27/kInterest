@@ -65,7 +65,7 @@ class BaseContainerTest {
         val container = BaseContainer(client, "hello-world")
         containers = containers + container.container
 
-        container.start(LogWaitStrategy(Duration.ofSeconds(5), LogAcceptor.string("https://docs.docker.com/get-started/")))
+        container.start(LogWaitStrategy(Duration.ofSeconds(25), LogAcceptor.string("https://docs.docker.com/get-started/")))
     }
 
     @Test
@@ -75,7 +75,7 @@ class BaseContainerTest {
         containers = containers + container1.container
         val container2 = BaseContainer(client, "hazelcast/hazelcast")
         containers = containers + container2.container
-        val timeout = Duration.ofSeconds(10)
+        val timeout = Duration.ofSeconds(25)
         container1.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         container2.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         val lcb = object : LogContainerResultCallback() {
@@ -102,7 +102,7 @@ class BaseContainerTest {
         val container2 = BaseContainer(client, "hazelcast/hazelcast", network = nw2, binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml"))))
         //container1.copyResourceToContainer("hazelcast-cluster.xml", javaClass.classLoader.getResource("hazelcast-cluster.xml"), "/opt/hazelcast/")
 
-        val timeout = Duration.ofSeconds(10)
+        val timeout = Duration.ofSeconds(25)
         container1.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         containers = containers + container1.container
         container2.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
@@ -142,7 +142,7 @@ class BaseContainerTest {
         val c2 = createContainer()
         val c3 = createContainer()
 
-        val timeout = Duration.ofSeconds(15L)
+        val timeout = Duration.ofSeconds(25L)
         fun start(c:BaseContainer) = c.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         start(c1)
         start(c2)
@@ -166,7 +166,7 @@ class BaseContainerTest {
         containers = containers + container3.container
         val container4 = BaseContainer(client, "hazelcast/hazelcast", network = nw2)
         containers = containers + container4.container
-        val timeout = Duration.ofSeconds(10)
+        val timeout = Duration.ofSeconds(25)
         container1.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         container2.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         container3.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
@@ -194,7 +194,7 @@ class BaseContainerTest {
     fun execTest() {
         val container1 = BaseContainer(client, "hazelcast/hazelcast")
         containers = containers + container1.container
-        container1.start(LogWaitStrategy(Duration.ofSeconds(15), LogAcceptor.string("is STARTED")))
+        container1.start(LogWaitStrategy(Duration.ofSeconds(25), LogAcceptor.string("is STARTED")))
         val res = container1.exec(listOf("ls", "/opt/"), duration = Duration.of(5, ChronoUnit.SECONDS))
         expectThat(res.isSuccess).isTrue()
         expectThat(res.getOrDefault { listOf() }.any { "hazelcast" in it }).isTrue()
