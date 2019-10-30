@@ -33,7 +33,7 @@ class DatastoreFactorySpec : StringSpec({
             fac.create(cfg).shouldNotBeNull()
             runBlocking { listener.expect { it is DatastoreStarted && it.ds.name ==  name} }.asClue {
                 it.shouldBeInstanceOf<DatastoreStarted>()
-                it.ds.name.shouldBe("ds1")
+                it.ds.name.shouldBe(name)
             }
         }
     }
