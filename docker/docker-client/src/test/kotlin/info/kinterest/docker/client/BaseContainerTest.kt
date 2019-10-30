@@ -23,6 +23,7 @@ import strikt.assertions.isTrue
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class BaseContainerTest {
@@ -65,7 +66,7 @@ class BaseContainerTest {
         }
 
         val container = BaseContainer(client, "hello-world")
-        containers += container.container
+        containers = containers + container.container
 
         container.start(LogWaitStrategy(Duration.ofSeconds(5), LogAcceptor.string("https://docs.docker.com/get-started/")))
     }
@@ -74,9 +75,9 @@ class BaseContainerTest {
     fun hazelcastClusterNoNw() {
         val container1 = BaseContainer(client, "hazelcast/hazelcast", env = listOf("JAVA_OPTS=-Dhazelcast.config=/opt/cluster/hazelcast-cluster.xml"),
                 binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml"))))
-        containers += container1.container
+        containers = containers + container1.container
         val container2 = BaseContainer(client, "hazelcast/hazelcast")
-        containers += container2.container
+        containers = containers + container2.container
         val timeout = Duration.ofSeconds(10)
         container1.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         container2.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
@@ -95,9 +96,10 @@ class BaseContainerTest {
 
     @Test
     fun hazelcastNetworkNoCluster() {
-        val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1").exec().id
-        val nw2 = client.createNetworkCmd().withDriver("bridge").withName("nw2").exec().id
-        networks += listOf(nw1, nw2)
+        val suffix = Random(System.currentTimeMillis()).nextInt(55555)
+        val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1$suffix").exec().id
+        val nw2 = client.createNetworkCmd().withDriver("bridge").withName("nw2$suffix").exec().id
+        networks = networks + listOf(nw1, nw2)
         log.info { "nw1: $nw1 nw2: $nw2" }
         val container1 = BaseContainer(client, "hazelcast/hazelcast", network = nw1)
         val container2 = BaseContainer(client, "hazelcast/hazelcast", network = nw2, binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml"))))
@@ -105,16 +107,11 @@ class BaseContainerTest {
 
         val timeout = Duration.ofSeconds(10)
         container1.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
-        containers += container1.container
+        containers = containers + container1.container
         container2.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
-        containers += container2.container
-        val lcb = object : LogContainerResultCallback() {
-            override fun onNext(item: Frame?) {
-                log.info { "$item" }
-            }
-        }
+        containers = containers + container2.container
 
-        var res : String = ""
+        var res = ""
         val execcb = object : ExecStartResultCallback() {
             override fun onNext(frame: Frame?) {
                 res += frame.toString()
@@ -138,8 +135,12 @@ class BaseContainerTest {
 
     @Test
     fun hazelCastCpCluster() {
-        val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1").exec().id.apply { networks += this }
-        fun createContainer() = BaseContainer(client, "hazelcast/hazelcast", network = nw1, binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml"))), env = listOf("JAVA_OPTS=-Dhazelcast.config=/opt/cluster/hazelcast-cluster.xml")).apply { containers += container }
+        val suffix = Random(System.currentTimeMillis()).nextInt(55555)
+        val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1$suffix").exec().id.apply { networks = networks + this }
+        fun createContainer() = BaseContainer(client, "hazelcast/hazelcast", network = nw1,
+                binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml"))),
+                env = listOf("JAVA_OPTS=-Dhazelcast.config=/opt/cluster/hazelcast-cluster.xml"))
+                .apply { containers = containers + container }
         val c1 = createContainer()
         val c2 = createContainer()
         val c3 = createContainer()
@@ -158,16 +159,16 @@ class BaseContainerTest {
     fun hazelcastNetworkTwoCluster() {
         val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1").exec().id
         val nw2 = client.createNetworkCmd().withDriver("bridge").withName("nw2").exec().id
-        networks += listOf(nw1, nw2)
+        networks = networks + listOf(nw1, nw2)
         log.info { "nw1: $nw1 nw2: $nw2" }
         val container1 = BaseContainer(client, "hazelcast/hazelcast", network = nw1)
-        containers += container1.container
+        containers = containers + container1.container
         val container2 = BaseContainer(client, "hazelcast/hazelcast", network = nw1)
-        containers += container2.container
+        containers = containers + container2.container
         val container3 = BaseContainer(client, "hazelcast/hazelcast", network = nw2)
-        containers += container3.container
+        containers = containers + container3.container
         val container4 = BaseContainer(client, "hazelcast/hazelcast", network = nw2)
-        containers += container4.container
+        containers = containers + container4.container
         val timeout = Duration.ofSeconds(10)
         container1.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
         container2.start(LogWaitStrategy(timeout, LogAcceptor.string("is STARTED")))
@@ -195,7 +196,7 @@ class BaseContainerTest {
     @Test
     fun execTest() {
         val container1 = BaseContainer(client, "hazelcast/hazelcast")
-        containers += container1.container
+        containers = containers + container1.container
         container1.start(LogWaitStrategy(Duration.ofSeconds(15), LogAcceptor.string("is STARTED")))
         val res = container1.exec(listOf("ls", "/opt/"), duration = Duration.of(5, ChronoUnit.SECONDS))
         expectThat(res.isSuccess).isTrue()
