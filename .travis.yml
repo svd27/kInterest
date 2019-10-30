@@ -6,7 +6,6 @@ services:
 before_install:
   - echo -e "docker stuff"
   - docker ps -a
-  - export DOCKER_HOST=`docker run --network host eclipse/che-ip`
   - echo $DOCKER_HOST
 
 before_cache:
