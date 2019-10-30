@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     kotlin("jvm")
     kotlin("kapt")
@@ -59,5 +61,10 @@ tasks.test {
     }
     useJUnitPlatform() {
         includeEngines ("spek2", "junit-jupiter")
+    }
+
+    testLogging {
+        events("failed", "skipped", "passed")
+        exceptionFormat = TestExceptionFormat.FULL
     }
 }
