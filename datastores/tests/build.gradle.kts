@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     kotlin("jvm")
     kotlin("kapt")
@@ -37,6 +39,10 @@ kapt {
 tasks.test {
     environment("DOCKER_HOST", "tcp://localhost:2375")
     systemProperty("io.netty.tryReflectionSetAccessible", false)
+    testLogging {
+        events("failed", "skipped", "passed")
+        exceptionFormat = TestExceptionFormat.FULL
+    }
 
     useJUnitPlatform() {
 
