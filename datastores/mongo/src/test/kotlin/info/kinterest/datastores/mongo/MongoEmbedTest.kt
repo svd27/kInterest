@@ -27,7 +27,7 @@ class MongoEmbedTest: Spek({
     cluster.start()
 
     describe("connecting to an embedded mongo") {
-        val mongodatastoreCfg = MongodatastoreConfig("test", "localhost", cluster.port!!)
+        val mongodatastoreCfg = MongodatastoreConfig("test", cluster.ip, cluster.port!!)
         val ds = MongoDatastore(mongodatastoreCfg, object : EventManager {
             override val datastore: BroadcastChannel<DatastoreEvent> = BroadcastChannel(10)
             override var entityChannels: Map<KIEntityMeta, BroadcastChannel<EntitiesEvent>> = mapOf()
