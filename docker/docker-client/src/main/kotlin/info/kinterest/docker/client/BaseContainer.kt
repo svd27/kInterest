@@ -130,7 +130,7 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
                 client.pullImageCmd(image).withTag(version).exec(pullCallback)
                 pullCallback.awaitCompletion()
             }
-            val createCommand = client.createContainerCmd(imgId!!)
+            val createCommand = client.createContainerCmd(imgId?:throw IllegalStateException("image $fullImageName not found"))
             if(cmd.isNotEmpty()) {
                 createCommand.withCmd(cmd).withArgsEscaped(false)
             }
@@ -152,10 +152,6 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
             }
 
             if (network != null) {
-                val nwlresp = client.listNetworksCmd().withIdFilter(network).exec()
-                if (nwlresp.isEmpty()) {
-                    throw IllegalStateException()
-                }
                 @Suppress("DEPRECATION")
                 createCommand.withNetworkMode(network)
             }
@@ -163,16 +159,6 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
                 log.info { "created container ${this.id}" }
                 warnings.forEach { log.warn { it } }
             }.id
-
-            /*
-            if (network != null) {
-                val nwlresp = client.listNetworksCmd().withIdFilter(network).exec()
-                if (nwlresp.isEmpty()) {
-                    throw IllegalStateException()
-                }
-                client.connectToNetworkCmd().withContainerId(container!!).withNetworkId(network).withContainerNetwork(ContainerNetwork().withAliases(aliases)).exec()
-            }
-             */
         }.fold({
             container?.let { removeContainer(it) }
             throw it
