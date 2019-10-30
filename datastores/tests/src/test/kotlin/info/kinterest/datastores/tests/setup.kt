@@ -84,10 +84,11 @@ val kodeinTest : Kodein = Kodein {
     import(kodeinDatastores)
     import(kodeinMongo)
     import(kodeinHazelcast)
+    val dh = System.getenv("DOCKER_HOST")
     bind<DockerClient>() with scoped(ProjectScope).singleton {
         val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
         val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
-                .withDockerHost("tcp://localhost:2375")
+                .withDockerHost(dh)
                 .withDockerTlsVerify(false)
                 .build()
         val client = DockerClientBuilder.getInstance(cfg)
