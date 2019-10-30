@@ -18,7 +18,7 @@ import org.kodein.di.generic.instance
 import org.kodein.di.generic.singleton
 
 @ExperimentalCoroutinesApi
-val dataStoresKodein = Kodein.Module("dataStores") {
+val kodeinDatastores = Kodein.Module("dataStores") {
     bind<EventManager>() with singleton {
         object : EventManager {
             override val log: KLogger = KotlinLogging.logger(EventManager::class.qualifiedName!!)
@@ -34,7 +34,7 @@ interface IdGenerator<V:Any> {
     fun next() : V
 }
 
-abstract class AbstractDatastore(cfg:DatastoreConfig, val events : EventManager) : Datastore {
+abstract class AbstractDatastore @ExperimentalCoroutinesApi constructor(cfg:DatastoreConfig, val events : EventManager) : Datastore {
     override val name: String = cfg.name
     val idGenerators : MutableMap<KIEntityMeta, IdGenerator<*>> = mutableMapOf()
 

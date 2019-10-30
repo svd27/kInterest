@@ -5,24 +5,13 @@ import com.github.dockerjava.api.command.DockerCmdExecFactory
 import com.github.dockerjava.core.DefaultDockerClientConfig
 import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
-import com.hazelcast.config.Config
-import com.hazelcast.core.Hazelcast
-import com.hazelcast.core.HazelcastInstance
-import de.flapdoodle.embed.mongo.MongodExecutable
-import de.flapdoodle.embed.mongo.MongodProcess
-import de.flapdoodle.embed.mongo.MongodStarter
-import de.flapdoodle.embed.mongo.config.MongodConfigBuilder
-import de.flapdoodle.embed.mongo.config.Net
-import de.flapdoodle.embed.mongo.distribution.Version
-import de.flapdoodle.embed.process.runtime.Network
 import info.kinterest.DONTDOTHIS
 import info.kinterest.datastore.Datastore
+import info.kinterest.datastores.kodeinDatastores
 import info.kinterest.datastores.hazelcast.HazelcastConfig
 import info.kinterest.datastores.hazelcast.HazelcastDatastore
-import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.datastores.mongo.MongoDatastore
-import info.kinterest.datastores.tests.containers.HazelcastClusterContainer
-import info.kinterest.datastores.tests.containers.MongoClusterContainer
+import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.docker.hazelcast.HazelcastCluster
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KotlinLogging
@@ -32,6 +21,8 @@ import org.kodein.di.bindings.ScopeCloseable
 import org.kodein.di.bindings.ScopeRegistry
 import org.kodein.di.bindings.StandardScopeRegistry
 import org.kodein.di.generic.*
+import java.time.Duration
+import java.util.stream.Stream
 
 interface KodeinCloseable<T> : ScopeCloseable {
     val content: T
@@ -41,19 +32,11 @@ interface KodeinCloseable<T> : ScopeCloseable {
 
 @ExperimentalCoroutinesApi
 val kodeinMongo = Kodein.Module(name = "mongo") {
-    bind<MongoClusterContainer>() with scoped(TestScope).singleton {
-        MongoClusterContainer()
-    }
-
-    bind<MongodatastoreConfig>() with multiton {name : String ->
-        val cluster : MongoClusterContainer = instance()
-        MongodatastoreConfig(name, cluster.mongoIp, cluster.mongoPort)
-    }
-
     bind<MongoDatastore>() with multiton { name : String ->
         MongoDatastore(factory<String,MongodatastoreConfig>()(name), instance())
     }
 }
+
 
 @ExperimentalCoroutinesApi
 val kodeinHazelcast = Kodein.Module("hazelcast") {
@@ -70,7 +53,7 @@ val kodeinHazelcast = Kodein.Module("hazelcast") {
 
 
     bind<HazelcastCluster>() with scoped(TestScope).singleton {
-        HazelcastCluster(instance())
+        HazelcastCluster(instance(), Duration.ofSeconds(30)).apply { start() }
     }
 
     bind<HazelcastConfig>() with multiton { name : String ->
@@ -85,6 +68,7 @@ val kodeinHazelcast = Kodein.Module("hazelcast") {
 
 @ExperimentalCoroutinesApi
 val kodeinTest : Kodein.Module = Kodein.Module("test") {
+    import(kodeinDatastores)
     import(kodeinMongo)
     import(kodeinHazelcast)
     bind<Datastore>() with multiton { type: String, name: String ->
@@ -94,13 +78,19 @@ val kodeinTest : Kodein.Module = Kodein.Module("test") {
             else -> DONTDOTHIS()
         }
     }
+    constant("test-datastores") with listOf<String>("hazelcast")
 }
 
-object TestScope : Scope<Any> {
-    private val mapRegistry = HashMap<Any, ScopeRegistry>()
-    private val log = KotlinLogging.logger { }
+object TestEnv {
+    val datastores = listOf("hazelcast")
+}
 
-    override fun getRegistry(context: Any): ScopeRegistry = synchronized(mapRegistry) {
+fun testDatastores() = listOf("hazelcast")
+
+abstract class BaseScope<T> : Scope<T> {
+    private val mapRegistry = HashMap<T, ScopeRegistry>()
+    private val log = KotlinLogging.logger { }
+    override fun getRegistry(context: T): ScopeRegistry = synchronized(mapRegistry) {
         log.info { "register $context" }
         mapRegistry[context] ?: run {
             val scopeRegistry = StandardScopeRegistry()
@@ -110,7 +100,7 @@ object TestScope : Scope<Any> {
         }
     }
 
-    fun close(context: Any) {
+    fun close(context: T) {
         synchronized(mapRegistry) {
             val scopeRegistry = mapRegistry[context]
             if (scopeRegistry != null) {
@@ -121,3 +111,6 @@ object TestScope : Scope<Any> {
         }
     }
 }
+
+object TestScope : BaseScope<Any>()
+object ProjectScope : BaseScope<Any>()

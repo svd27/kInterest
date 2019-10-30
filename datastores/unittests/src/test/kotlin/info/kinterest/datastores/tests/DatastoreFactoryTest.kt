@@ -1,14 +1,12 @@
 package info.kinterest.datastores.tests
 
 import com.hazelcast.core.HazelcastInstance
-import de.flapdoodle.embed.mongo.MongodProcess
 import info.kinterest.DatastoreEvent
 import info.kinterest.datastore.DatastoreConfig
 import info.kinterest.datastore.EventManager
 import info.kinterest.datastores.DatastoreFactory
-import info.kinterest.datastores.dataStoresKodein
+import info.kinterest.datastores.kodeinDatastores
 import info.kinterest.datastores.hazelcast.HazelcastConfig
-import info.kinterest.datastores.mongo.MongodatastoreConfig
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.junit.jupiter.api.*
@@ -29,18 +27,10 @@ class DatastoreFactoryTest : KodeinAware {
         log.info { "before all" }
         TestScope.getRegistry(this)
         kodein = Kodein {
-            import(dataStoresKodein)
-            import(kodeinMongo)
-            import(kodeinHazelcast)
-            bind<DatastoreConfig>("ds1") with scoped(TestScope).singleton {
-                val mongodProcess = instance<MongodProcess>()
-                MongodatastoreConfig("ds1", "localhost", 27027)
-            }
+            import(kodeinTest)
 
-            bind<DatastoreConfig>("ds2") with scoped(TestScope).singleton {
-                instance<HazelcastInstance>()
-                HazelcastConfig("ds2", mapOf())
-            }
+            bind<DatastoreConfig>("ds1") with scoped(TestScope).singleton { factory<String,DatastoreConfig>()("ds1") }
+            bind<DatastoreConfig>("ds2") with scoped(TestScope).singleton { factory<String,DatastoreConfig>()("ds1") }
         }
     }
 

@@ -39,6 +39,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
     testImplementation("org.mongodb:mongodb-driver-reactivestreams:1.12.0")
     testImplementation("com.hazelcast:hazelcast-client:$hazelcastVersion")
+    testImplementation("io.kotlintest:kotlintest-runner-junit5:3.4.2")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {

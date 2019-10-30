@@ -54,7 +54,7 @@ sealed class Waiter {
         }
     }
 
-    abstract suspend fun waiter(): Unit
+    abstract suspend fun waiter()
     abstract fun done()
 }
 
@@ -103,6 +103,7 @@ class LogWaitStrategy(duration: java.time.Duration, val acceptor: LogAcceptor) :
 
 class BaseContainer(val client: DockerClient, val image: String, val version: String = "latest",
                     exposedPorts: ExposedPorts? = null,
+                    portBindings: List<PortBinding> = listOf(),
                     cmd : List<String> = emptyList(),
                     env : List<String> = emptyList(),
                     val network: String? = null,
@@ -131,35 +132,47 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
             }
             val createCommand = client.createContainerCmd(imgId!!)
             if(cmd.isNotEmpty()) {
-                createCommand.withCmd(cmd)
+                createCommand.withCmd(cmd).withArgsEscaped(false)
             }
 
-            if (aliases != null && aliases.toList().isNotEmpty()) {
-                createCommand.withAliases(aliases.toList())
-            }
             if(env.isNotEmpty())
             createCommand.withEnv(env)
 
-            if (exposedPorts != null) createCommand
-                    .withExposedPorts(exposedPorts.exposedPorts.asList())
-                    .withPortBindings(exposedPorts.exposedPorts.map { PortBinding.parse("${it.port}:${it.port}/tcp") })
+            if (exposedPorts != null) createCommand.withExposedPorts(exposedPorts.exposedPorts.asList())
+            @Suppress("DEPRECATION")
+            if(portBindings.isNotEmpty()) createCommand.withPortBindings(portBindings)
             if(binds.firstOrNull()!=null) {
+                @Suppress("DEPRECATION")
                 createCommand.withBinds(createBinds(binds)).exec().apply {
                     warnings.forEach { log.warn { it } }
                 }
             }
-            container = createCommand.exec().apply {
-                log.info { "created container ${this.id}" }
-                warnings.forEach { log.warn { it } }
-            }.id
+            if (aliases != null && aliases.toList().isNotEmpty()) {
+                createCommand.withAliases(aliases.toList())
+            }
 
             if (network != null) {
                 val nwlresp = client.listNetworksCmd().withIdFilter(network).exec()
                 if (nwlresp.isEmpty()) {
                     throw IllegalStateException()
                 }
-                client.connectToNetworkCmd().withContainerId(container!!).withNetworkId(network).exec()
+                @Suppress("DEPRECATION")
+                createCommand.withNetworkMode(network)
             }
+            container = createCommand.exec().apply {
+                log.info { "created container ${this.id}" }
+                warnings.forEach { log.warn { it } }
+            }.id
+
+            /*
+            if (network != null) {
+                val nwlresp = client.listNetworksCmd().withIdFilter(network).exec()
+                if (nwlresp.isEmpty()) {
+                    throw IllegalStateException()
+                }
+                client.connectToNetworkCmd().withContainerId(container!!).withNetworkId(network).withContainerNetwork(ContainerNetwork().withAliases(aliases)).exec()
+            }
+             */
         }.fold({
             container?.let { removeContainer(it) }
             throw it
@@ -171,9 +184,12 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
     }
 
     val ipAddress: String by lazy {
+        "localhost"
+        /*
         client.inspectContainerCmd(container).exec().run {
-            networkSettings.networks["bridge"]?.ipAddress ?: throw IllegalStateException()
+            networkSettings.networks[network]?.ipAddress ?: throw IllegalStateException()
         }
+         */
     }
 
     val ports: Map<Int, Array<Ports.Binding>> by lazy {
@@ -233,7 +249,13 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
     }
 
     private fun removeContainer(container: String) {
-        client.removeContainerCmd(container).withForce(true).withRemoveVolumes(true).exec().apply { log.debug { "executed removeContainer" } }
+        runBlocking {
+            withTimeout(5000) {
+                while (client.inspectContainerCmd(container).withContainerId(container).exec().state.running.apply { log.debug { "state.running == $this" } } == true) { delay(100)}
+            }
+            client.removeContainerCmd(container).withForce(true).withRemoveVolumes(true).exec().apply { log.debug { "executed removeContainer" } }
+        }
+
     }
 
     fun waitForLog(acc: LogAcceptor, duration: java.time.Duration) {

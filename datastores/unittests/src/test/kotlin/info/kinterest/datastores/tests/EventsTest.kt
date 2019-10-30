@@ -3,11 +3,9 @@ package info.kinterest.datastores.tests
 import info.kinterest.*
 import info.kinterest.datastore.Datastore
 import info.kinterest.datastore.EventManager
-import info.kinterest.datastores.dataStoresKodein
 import info.kinterest.datastores.tests.jvm.PersonTransient
 import info.kinterest.entity.PropertyName
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runBlockingTest
 import mu.KotlinLogging
 import org.junit.jupiter.api.*
 import org.junit.jupiter.params.ParameterizedTest
@@ -16,7 +14,6 @@ import org.kodein.di.Kodein
 import org.kodein.di.KodeinAware
 import org.kodein.di.generic.instance
 import org.kodein.di.generic.on
-import org.kodein.di.generic.with
 import strikt.api.expectThat
 import strikt.assertions.*
 
@@ -40,11 +37,7 @@ class EventsTest : KodeinAware {
     }
 
     fun initKodein(mongoDbName:String, hazelcastName:String) : Kodein = Kodein {
-        import(dataStoresKodein)
-        import(kodeinMongo)
-        import(kodeinHazelcast)
-        constant("mongoDbName") with mongoDbName
-        constant("hazelcastDs") with hazelcastName
+        import(kodeinTest)
     }
 
 
@@ -94,7 +87,8 @@ class EventsTest : KodeinAware {
         val channelListener = ChannelListener(evMgr.listener(info.kinterest.datastores.tests.jvm.PersonJvm))
         ds.register(info.kinterest.datastores.tests.jvm.PersonJvm)
 
-        val pt = listOf(PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa")), PersonTransient(null, mutableMapOf("name" to "duric", "first" to "karin")))
+        val pt = listOf(PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa")),
+                PersonTransient(null, mutableMapOf("name" to "duric", "first" to "karin")))
 
         val ps = ds.create(*pt.toTypedArray()).fold({throw it}) { it}
 

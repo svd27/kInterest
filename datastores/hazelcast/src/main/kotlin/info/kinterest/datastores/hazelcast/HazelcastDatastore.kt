@@ -39,12 +39,15 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
     val log = KotlinLogging.logger {  }
     override val name: String = cfg.name
 
-    val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply { addresses = cfg.addresses }))
+    val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply {
+        addresses = cfg.addresses
+        setSmartRouting(false)
+    }))
     val dbLock : Mutex = Mutex()
     val collections = mutableMapOf<KIEntityMeta, IMap<Any,HazelcastJsonValue>>()
     val metas : MutableMap<String,KIEntityMeta> = mutableMapOf()
 
-    inline fun collection(meta: KIEntityMeta) : IMap<Any,HazelcastJsonValue> =
+    fun collection(meta: KIEntityMeta) : IMap<Any,HazelcastJsonValue> =
             collections.getOrElse(meta.baseMeta) {throw DatastoreUnknownType(meta, this)}
 
     init {
@@ -70,7 +73,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
                     else -> throw DatastoreException(this, "ids of type ${meta.idType} not supported")
                 }
             }
-            collections[meta.baseMeta] = client.getMap<Any,HazelcastJsonValue>(name)
+            collections[meta.baseMeta] = client.getMap<Any,HazelcastJsonValue>("${this.name}name")
         }
     }
 
@@ -88,18 +91,18 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
     override suspend fun <ID : Any, E : KITransientEntity<ID>> create(entities: Iterable<E>): Try<Collection<KIEntity<ID>>> = Try.suspended {
         val es = entities.toList()
         if(es.isEmpty()) return@suspended listOf<KIEntity<ID>>()
-        val rootMeta = es[0]._meta
-        val collection = collection(rootMeta)
+        val meta = es[0]._meta
+        val collection = collection(meta)
         es.map {
-            val meta = it._meta
-            require(meta is KIEntityMetaJvm)
-            val metaInfo = meta.initMetaBlock()
+            val kiEntityMeta = it._meta
+            require(kiEntityMeta is KIEntityMetaJvm)
+            val metaInfo = kiEntityMeta.initMetaBlock()
             val types = metaInfo.types
             val metaInfType = types.joinToString(separator = ",") { it.name }
             val metaMap = mapOf(KIEntityMeta.TYPEKEY to metaInfo.type.name, KIEntityMeta.TYPESKEY to metaInfo.types.map { it.name }, KIEntityMeta.RELATIONSKEY to metaInfo.relations)
-            log.debug { "create meta: $meta\nmetainfo: $metaInfo\ntypes: $metaInfType" }
-            val id = if(meta.idGenerated) {
-                idGenerator(meta).next()
+            log.debug { "create meta: $kiEntityMeta\nmetainfo: $metaInfo\ntypes: $metaInfType" }
+            val id = if(kiEntityMeta.idGenerated) {
+                idGenerator(kiEntityMeta).next()
             } else it._id!!
             val properties = it.properties + (METAINFO to metaMap) + (METAINFO_TYPE to metaInfType)
             log.debug { "create json: ${klaxon.toJsonString(properties)}" }
@@ -107,7 +110,8 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
                     //TODO: the filter should not be neccessary
                     properties.filter { it.value!=null }
             ).apply { log.trace { "creating json $this" } }))
-            meta.instance<ID>(this, id as ID)
+            @Suppress("UNCHECKED_CAST")
+            kiEntityMeta.instance<ID>(this, id as ID)
         }.apply { events.entitiesCreated(this) }
     }
 
@@ -153,7 +157,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
         val collection = collection(f.meta)
         val typePredicate = Predicates.ilike(METAINFO_TYPE, "%${f.meta.name}%")
         val predicate = Predicates.and(typePredicate, f.predicate)
-        log.debug { "query predicate: $predicate" }
+        log.debug { "query ${collection.name} predicate: $predicate" }
         collection.entrySet (predicate).map {
             deserialise<E, ID>(it.key, it.value)
         }.apply { log.trace { "returning $this" } }
@@ -162,19 +166,23 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
     private fun <E : KIEntity<ID>, ID : Any> deserialise(id:Any, value : HazelcastJsonValue): E {
         val map = klaxon.parse<Map<String, Any?>>(value.toString())
         log.trace { "retrieved $map" }
-        val metaEntry = map?.getOrElse(METAINFO) { throw DatastoreException(this, "no ${METAINFO} found in $map") } as? Map<String, Any>
+        @Suppress("UNCHECKED_CAST")
+        val metaEntry =
+                map?.getOrElse(METAINFO) { throw DatastoreException(this, "no ${METAINFO} found in $map") } as? Map<String, Any>
                 ?: throw DatastoreException(this, "$METAINFO is not a map")
         log.trace { "metaEntry $metaEntry" }
         val metaName = metaEntry.getOrElse(KIEntityMeta.TYPEKEY) { throw DatastoreException(this, "no ${KIEntityMeta.TYPEKEY} found in $metaEntry") }
         val meta = metas.getOrElse(metaName.toString()) { throw DatastoreException(this, "unknown meta $metaName") }
         log.trace { "$metaName returned $meta with name ${meta.name}" }
 
+        @Suppress("UNCHECKED_CAST")
         return (@Suppress("UNCHECKED_CAST")
         meta.instance<ID>(this, id) as E).apply {
             log.trace { "returning $this" }
         }
     }
 
+    @Suppress("UNCHECKED_CAST")
     val Filter<*, *>.predicate: Predicate<String, Any?>
         get() = PredicateBuilder().entryObject.let { e ->
             when (this) {

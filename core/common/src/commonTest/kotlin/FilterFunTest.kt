@@ -13,6 +13,7 @@ class FilterFunTest {
         override val _store: Datastore = NOSTORE
         override val _meta: KIEntityMeta = AEntity
 
+        @Suppress("UNCHECKED_CAST")
         override fun <V> getValue(propertyName: PropertyName): V = when(propertyName.name) {
             "name" -> name as V
             "age" -> age as V
@@ -24,8 +25,11 @@ class FilterFunTest {
         }
 
         override fun equals(other: Any?): Boolean = _equals(other)
+        override fun hashCode(): Int = _hashCode()
 
         companion object : KIEntityMeta {
+            override val name: String
+                get() = AEntity::class.qualifiedName!!
             override val type: KClass<*>
                 get() = AEntity::class
             override val idType: KClass<*>
@@ -55,6 +59,7 @@ class FilterFunTest {
         val e3 = AEntity(2, null, 3)
 
         assertFalse(f.matches(e1))
+        assertTrue(f.matches(e2))
         assertTrue(f.matches(e3))
     }
 }

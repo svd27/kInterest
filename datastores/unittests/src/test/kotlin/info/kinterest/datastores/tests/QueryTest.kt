@@ -1,17 +1,13 @@
 package info.kinterest.datastores.tests
 
-import info.kinterest.*
 import info.kinterest.datastore.Datastore
-import info.kinterest.datastore.EventManager
-import info.kinterest.datastores.dataStoresKodein
+import info.kinterest.datastores.kodeinDatastores
 import info.kinterest.datastores.tests.jvm.EmployeeTransient
 import info.kinterest.datastores.tests.jvm.ManagerTransient
 import info.kinterest.datastores.tests.jvm.PersonTransient
-import info.kinterest.entity.PropertyName
 import info.kinterest.filter.filter
 import info.kinterest.functional.getOrDefault
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runBlockingTest
 import mu.KotlinLogging
 import org.junit.jupiter.api.*
 import org.junit.jupiter.params.ParameterizedTest
@@ -24,7 +20,7 @@ import org.kodein.di.generic.with
 import strikt.api.expectThat
 import strikt.assertions.*
 
-val Any.unit : Unit get() = Unit
+val Any.unit get() = Unit
 
 @DisplayName("Query")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -46,11 +42,7 @@ class QueryTest : KodeinAware {
     }
 
     fun initKodein(mongoDbName:String, hazelcastName:String) : Kodein = Kodein {
-        import(dataStoresKodein)
-        import(kodeinMongo)
-        import(kodeinHazelcast)
-        constant("mongoDbName") with mongoDbName
-        constant("hazelcastDs") with hazelcastName
+        import(kodeinTest)
     }
 
 

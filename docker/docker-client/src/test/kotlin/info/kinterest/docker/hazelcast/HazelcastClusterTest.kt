@@ -47,7 +47,7 @@ internal class HazelcastClusterTest {
         val cluster = HazelcastCluster(client = client, duration = Duration.of(25, ChronoUnit.SECONDS))
         cluster.start()
         cluster.containers.map {
-            Try { log.debug { "${it.key.ipAddress}" } }
+            Try { log.debug { it.key.ipAddress } }
             Try {log.debug { "${it.key.ports}" }}
 
         }
@@ -62,11 +62,11 @@ internal class HazelcastClusterTest {
     fun testClient() {
         val cluster = HazelcastCluster(client = client, duration = Duration.of(25, ChronoUnit.SECONDS))
         cluster.start()
-        val hzcl = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().setAddresses(cluster.ips)))
+        val hzcl = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().setAddresses(cluster.ips).setSmartRouting(false)))
         hzcl.distributedObjects.forEach { log.debug { "distributed object $it" } }
         val al = hzcl.cpSubsystem.getAtomicLong("x")
         al.set(1L)
-        al.addAndGetAsync(2)
+        al.addAndGet(2)
         expectThat(al.get()).isEqualTo(3)
     }
 }

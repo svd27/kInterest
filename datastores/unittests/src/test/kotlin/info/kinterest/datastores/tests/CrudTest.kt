@@ -1,9 +1,8 @@
 package info.kinterest.datastores.tests
 
 import info.kinterest.datastore.Datastore
-import info.kinterest.datastores.dataStoresKodein
+import info.kinterest.datastores.kodeinDatastores
 import info.kinterest.datastores.hazelcast.HazelcastConfig
-import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.datastores.tests.jvm.PersonTransient
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
@@ -11,7 +10,6 @@ import mu.KotlinLogging
 import org.junit.jupiter.api.*
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.params.provider.ValueSource
 import org.kodein.di.Kodein
 import org.kodein.di.KodeinAware
 import org.kodein.di.generic.*
@@ -22,6 +20,7 @@ import strikt.assertions.hasSize
 import strikt.assertions.isEmpty
 import strikt.assertions.isEqualTo
 import java.util.stream.Stream
+import kotlin.streams.toList
 
 @DisplayName("CRUD")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -32,6 +31,8 @@ class CrudTest : KodeinAware {
     @BeforeAll
     fun beforeAll() {
         log.info { "before all" }
+        log.debug { "datasources: ${types().toList()}" }
+        System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn")
 
         TestScope.getRegistry(this)
         kodein = initKodein()
@@ -46,20 +47,20 @@ class CrudTest : KodeinAware {
     @ExperimentalCoroutinesApi
     fun initKodein() : Kodein = Kodein {
         import(kodeinTest)
-        import(dataStoresKodein)
+        import(kodeinDatastores)
     }
 
     companion object {
-        @Suppress("unused")
-        @JvmStatic
-        fun types() = Stream.of(
-                //MongodatastoreConfig.TYPE,
-                HazelcastConfig.TYPE)
+        //@Suppress("unused")
+        //@JvmStatic
+
     }
 
+
+    fun types()  = TestEnv.datastores
     @DisplayName("insert")
     @ParameterizedTest(name = "Datastore: {0}")
-    @MethodSource("types")
+    @MethodSource("info.kinterest.datastores.tests.SetupKt#testDatastores")
     fun insertTest(which:String) {
         val ds : Datastore by kodein.on(this).newInstance<Datastore> {instance(arg = M(which, "ds$which")) }
         runBlocking { ds.register(info.kinterest.datastores.tests.jvm.PersonJvm) }

@@ -26,5 +26,7 @@
 
     <logger name="org.testcontainers" level="INFO"/>
     <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="io.netty" level="ERROR"/>
+    <logger name="info.kinterest.docker.client" level="TRACE"/>
 
 </configuration>

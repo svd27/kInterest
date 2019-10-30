@@ -3,6 +3,8 @@ package info.kinterest.docker.hazelcast
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.model.ExposedPort
 import com.github.dockerjava.api.model.ExposedPorts
+import com.github.dockerjava.api.model.PortBinding
+import com.github.dockerjava.api.model.Ports
 import info.kinterest.docker.client.BaseContainer
 import info.kinterest.docker.client.LogAcceptor
 import info.kinterest.docker.client.LogWaitStrategy
@@ -22,14 +24,15 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.concurrent.Executors
 import javax.xml.bind.JAXBElement
 import javax.xml.parsers.SAXParser
 import kotlin.random.Random
 
 class HazelcastCluster(private val client: DockerClient, private val duration: Duration = Duration.ofSeconds(10)) {
     private val log = KotlinLogging.logger { }
-    val coroutineDispatcher = newFixedThreadPoolContext(4, "$this")
-    val scope : CoroutineScope = CoroutineScope(coroutineDispatcher)
+    private val coroutineDispatcher = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
+    private val scope : CoroutineScope = CoroutineScope(coroutineDispatcher)
     val ips: List<String>
         get() = containers.map {
             "${it.key.ipAddress}:${it.value}"
@@ -53,17 +56,17 @@ class HazelcastCluster(private val client: DockerClient, private val duration: D
             }
         }))
 
-        var portStart = rnd.nextInt(32000, 40000)
+        val portStart = rnd.nextInt(32000, 40000)
         repeat(3) {
-            val url = prepareXml(portStart)
+            val port = portStart+it
+            val url = prepareXml(port)
 
             conts += BaseContainer(client = client, image = "hazelcast/hazelcast",
                     network = nw,
                     binds = listOf("/opt/cluster" to listOf(url)),
                     env = listOf("JAVA_OPTS=-Dhazelcast.config=/opt/cluster/hazelcast-cluster.xml"),
-                    exposedPorts = ExposedPorts(ExposedPort(portStart))) to portStart
-
-            portStart += 1
+                    exposedPorts = ExposedPorts(ExposedPort(port)),
+                    portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"), ExposedPort(port)))) to (port)
         }
 
         containers = conts.toMap()
@@ -73,16 +76,15 @@ class HazelcastCluster(private val client: DockerClient, private val duration: D
     fun start() {
         log.debug { containers.keys }
         val asyncs = containers.keys.map {
-            scope.async {
+            scope.async(coroutineDispatcher) {
                 log.debug { "launching: ${it.container}" }
                 it.start(LogWaitStrategy(duration = duration, acceptor = LogAcceptor.string("is STARTED")))
                 it
             }
         }.apply { log.info { "created deferred $this" } }
         runBlocking(coroutineDispatcher) { asyncs.awaitAll() }
-        containers.keys.firstOrNull()?.let { container ->
-            container.waitForLog(LogAcceptor.regex(".*CPMember.*uuid=.*, address=.*:.*- LEADER.*".toRegex()), duration)
-        } ?: throw IllegalStateException()
+        containers.keys.firstOrNull()?.waitForLog(LogAcceptor.regex(".*CPMember.*uuid=.*, address=.*:.*- LEADER.*".toRegex()), duration)
+                ?: throw IllegalStateException()
     }
 
     fun stop() {
