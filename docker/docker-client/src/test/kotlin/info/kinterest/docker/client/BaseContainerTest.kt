@@ -35,10 +35,7 @@ class BaseContainerTest {
     @BeforeAll
     fun setUp() {
         val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
-        val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
-                .withDockerHost("tcp://localhost:2375")
-                .withDockerTlsVerify(false)
-                .build()
+        val cfg = DockerClientConfigProvider.config()
         client = DockerClientBuilder.getInstance(cfg)
                 .withDockerCmdExecFactory(cmds)
                 .build()

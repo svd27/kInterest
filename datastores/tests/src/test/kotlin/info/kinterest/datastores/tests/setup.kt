@@ -13,6 +13,7 @@ import info.kinterest.datastores.hazelcast.HazelcastConfig
 import info.kinterest.datastores.hazelcast.HazelcastDatastore
 import info.kinterest.datastores.mongo.MongoDatastore
 import info.kinterest.datastores.mongo.MongodatastoreConfig
+import info.kinterest.docker.client.DockerClientConfigProvider
 import info.kinterest.docker.hazelcast.HazelcastCluster
 import info.kinterest.docker.mongo.MongoCluster
 import io.kotlintest.AbstractProjectConfig
@@ -85,12 +86,10 @@ val kodeinTest : Kodein = Kodein {
     import(kodeinMongo)
     import(kodeinHazelcast)
     //val dh = System.getenv("DOCKER_HOST")
+    log.info { System.getenv() }
     bind<DockerClient>() with scoped(ProjectScope).singleton {
         val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
-        val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
-                //.withDockerHost(dh)
-                .withDockerTlsVerify(false)
-                .build()
+        val cfg = DockerClientConfigProvider.config()
         val client = DockerClientBuilder.getInstance(cfg)
                 .withDockerCmdExecFactory(cmds)
                 .build()

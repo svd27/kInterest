@@ -2,27 +2,20 @@ package info.kinterest.docker.hazelcast
 
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.command.DockerCmdExecFactory
-import com.github.dockerjava.core.DefaultDockerClientConfig
 import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import com.hazelcast.client.HazelcastClient
 import com.hazelcast.client.config.ClientConfig
 import com.hazelcast.client.config.ClientNetworkConfig
+import info.kinterest.docker.client.DockerClientConfigProvider
 import info.kinterest.functional.Try
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
-import org.bouncycastle.crypto.tls.ConnectionEnd.client
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import strikt.api.expectThat
 import strikt.assertions.hasSize
 import strikt.assertions.isEqualTo
-import strikt.assertions.isTrue
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 
@@ -32,11 +25,11 @@ internal class HazelcastClusterTest {
     lateinit var client : DockerClient
     @BeforeAll
     fun setUp() {
+        log.info { System.getProperty("os.name") }
+        log.info { System.getenv("DOCKER_OPTS") }
+        log.info { System.getenv("DOCKER_HOST") }
         val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
-        val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
-                .withDockerHost("tcp://localhost:2375")
-                .withDockerTlsVerify(false)
-                .build()
+        val cfg = DockerClientConfigProvider.config()
         client = DockerClientBuilder.getInstance(cfg)
                 .withDockerCmdExecFactory(cmds)
                 .build()

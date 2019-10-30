@@ -5,21 +5,14 @@ import com.github.dockerjava.api.command.DockerCmdExecFactory
 import com.github.dockerjava.api.model.ExposedPort
 import com.github.dockerjava.api.model.Frame
 import com.github.dockerjava.api.model.PullResponseItem
-import com.github.dockerjava.core.DefaultDockerClientConfig
 import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.core.command.LogContainerResultCallback
 import com.github.dockerjava.core.command.PullImageResultCallback
-import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import java.io.Closeable
-import java.lang.Exception
-import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -30,10 +23,7 @@ class TestDockerClient {
     @BeforeAll
     fun setUp() {
         val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
-        val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
-                .withDockerHost("tcp://localhost:2375")
-                .withDockerTlsVerify(false)
-                .build()
+        val cfg = DockerClientConfigProvider.config()
         client = DockerClientBuilder.getInstance(cfg)
                 .withDockerCmdExecFactory(cmds)
                 .build()
