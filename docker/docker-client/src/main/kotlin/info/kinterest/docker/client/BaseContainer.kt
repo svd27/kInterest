@@ -118,7 +118,7 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
         var imgId: String? = null
         var container: String? = null
         Try {
-            imgId = client.listImagesCmd().withImageNameFilter(image).exec().firstOrNull { it.repoTags.any { it == fullImageName || it == version } }?.id
+            imgId = findImage()
             if (imgId == null) {
                 val pullCallback = object : PullImageResultCallback() {
                     override fun onNext(item: PullResponseItem?) {
@@ -128,7 +128,10 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
                     }
                 }
                 client.pullImageCmd(image).withTag(version).exec(pullCallback)
-                pullCallback.awaitCompletion()
+                Try {pullCallback.awaitCompletion(); Unit }.getOrElse {
+                    log.warn { "pull not successfull trying to retrieve again" }
+                    imgId = findImage()
+                }
             }
             val createCommand = client.createContainerCmd(imgId?:throw IllegalStateException("image $fullImageName not found"))
             if(cmd.isNotEmpty()) {
@@ -144,7 +147,7 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
             if(binds.firstOrNull()!=null) {
                 @Suppress("DEPRECATION")
                 createCommand.withBinds(createBinds(binds)).exec().apply {
-                    warnings.forEach { log.warn { it } }
+                    warnings?.forEach { log.warn { it } }
                 }
             }
             if (aliases != null && aliases.toList().isNotEmpty()) {
@@ -157,7 +160,7 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
             }
             container = createCommand.exec().apply {
                 log.info { "created container ${this.id}" }
-                warnings.forEach { log.warn { it } }
+                warnings?.forEach { log.warn { it } }
             }.id
         }.fold({
             container?.let { removeContainer(it) }
@@ -168,6 +171,9 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
         imageId = imgId!!
         this.container = container!!
     }
+
+    private fun findImage() =
+            client.listImagesCmd().withImageNameFilter(image).exec().firstOrNull { it.repoTags.any { it == fullImageName || it == version } }?.id
 
     val ipAddress: String by lazy {
         "localhost"
