@@ -5,7 +5,10 @@ import info.kinterest.DatastoreEvent
 import info.kinterest.EntitiesEvent
 import info.kinterest.datastore.EventManager
 import info.kinterest.datastores.mongo.jvm.OneTransient
+import info.kinterest.docker.client.DockerClientConfigProvider
+import info.kinterest.docker.mongo.MongoCluster
 import info.kinterest.entity.KIEntityMeta
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BroadcastChannel
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitLast
@@ -17,12 +20,14 @@ import org.bson.Document
 import org.spekframework.spek2.Spek
 import org.spekframework.spek2.style.specification.describe
 
+@ExperimentalCoroutinesApi
 class MongoEmbedTest: Spek({
-    beforeGroup { setUpMongo() }
+    val cluster = MongoCluster(DockerClientConfigProvider.client())
     val log = KotlinLogging.logger {}
-    val mongodatastoreCfg : MongodatastoreConfig = MongodatastoreConfig("test", "localhost", 27027)
+    cluster.start()
 
     describe("connecting to an embedded mongo") {
+        val mongodatastoreCfg = MongodatastoreConfig("test", "localhost", cluster.port!!)
         val ds = MongoDatastore(mongodatastoreCfg, object : EventManager {
             override val datastore: BroadcastChannel<DatastoreEvent> = BroadcastChannel(10)
             override var entityChannels: Map<KIEntityMeta, BroadcastChannel<EntitiesEvent>> = mapOf()
@@ -55,12 +60,12 @@ class MongoEmbedTest: Spek({
             runBlocking {  docs.insertMany(documents).awaitLast() }
             val count = runBlocking {docs.countDocuments().awaitFirstOrNull()}
             assert(count == 50L)
-            runBlocking { docs.find().limit(100).collect { println(it); assert(it["name"] == "me") } }
+            runBlocking { docs.find().limit(100).collect { println(it); require(it["name"] == "me") } }
         }
 
         it("can insert an entity") {
             runBlocking { ds.register(info.kinterest.datastores.mongo.jvm.OneJvm) }
-            val oneTransient = OneTransient(null, mutableMapOf("name" to "sasa"))
+            val oneTransient = OneTransient(mutableMapOf<String,Any?>("name" to "sasa"))
             val res = runBlocking { ds.create(oneTransient) }
             assert(res.isSuccess)
             val entities = res.fold({throw it}) {it}

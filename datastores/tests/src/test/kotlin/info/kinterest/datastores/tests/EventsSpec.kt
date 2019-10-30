@@ -7,7 +7,6 @@ import info.kinterest.datastore.Datastore
 import info.kinterest.datastore.EventManager
 import info.kinterest.datastores.tests.jvm.PersonJvm
 import info.kinterest.datastores.tests.jvm.PersonTransient
-import info.kinterest.entity.PropertyName
 import io.kotlintest.forAll
 import io.kotlintest.matchers.asClue
 import io.kotlintest.matchers.collections.shouldBeEmpty
@@ -15,7 +14,6 @@ import io.kotlintest.matchers.collections.shouldContain
 import io.kotlintest.matchers.collections.shouldContainExactly
 import io.kotlintest.matchers.collections.shouldHaveSize
 import io.kotlintest.matchers.types.shouldBeInstanceOf
-import io.kotlintest.properties.forAll
 import io.kotlintest.provided.ProjectConfig
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FreeSpec
@@ -35,14 +33,14 @@ class EventsSpec : FreeSpec({
     forAll(ProjectConfig.datastores) { which ->
         val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "evtsds1"))
         val evMgr: EventManager by kodein.instance()
-        "with an EventManager" - {
+        "given a datastore($which)" - {
             val channelListener = ChannelListener(evMgr.listener(PersonJvm))
-            "given a datastore($which)" - {
+            "operations" - {
                 ds.register(PersonJvm)
 
                 "creating some entities of type ${PersonJvm}" - {
-                    val pt = listOf(PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa")),
-                            PersonTransient(null, mutableMapOf("name" to "duric", "first" to "karin")))
+                    val pt = listOf(PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa")),
+                            PersonTransient(mutableMapOf<String,Any?>("name" to "duric", "first" to "karin")))
 
                     val ps = ds.create(pt).fold({ throw it }) { it }
                     ps.shouldHaveSize(2)
@@ -65,7 +63,7 @@ class EventsSpec : FreeSpec({
                 }
 
                 "given an enitity of type ${PersonJvm}" - {
-                    val pt = PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa"))
+                    val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa"))
 
                     val pe = ds.create(pt).fold({ throw it }) { assert(it.size == 1); it.first() }
                     require(pe is Person)
@@ -92,7 +90,9 @@ class EventsSpec : FreeSpec({
                 }
 
                 "given some entities of type ${PersonJvm}" - {
-                    val pt = listOf(PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa")), PersonTransient(null, mutableMapOf("name" to "duric", "first" to "karin")))
+                    val pt = listOf(
+                            PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa")),
+                            PersonTransient(mutableMapOf<String,Any?>("name" to "duric", "first" to "karin")))
 
                     val ps = ds.create(pt).fold({ throw it }) { it }
 
@@ -105,7 +105,7 @@ class EventsSpec : FreeSpec({
                     retrieved.filterIsInstance<Person>().first { it.first == "sasa" }.apply { first = "sascha" }
                     val evt = channelListener.expect {
                         log.trace { "check $it" }
-                        it is EntityUpdated<*, *> && it.updates.any { it.property == PropertyName("first") && it.old == "sasa" && it.new == "sascha" }
+                        it is EntityUpdated<*, *> && it.updates.any { it.property.name == "first" && it.old == "sasa" && it.new == "sascha" }
                     }
                     evt.asClue {
                         it.shouldBeInstanceOf<EntityUpdated<*, *>>()
@@ -114,7 +114,7 @@ class EventsSpec : FreeSpec({
                             it.updates.asClue {
                                 it.shouldHaveSize(1)
                                 it.first().asClue {
-                                    it.property.shouldBe(PropertyName("first"))
+                                    it.property.shouldBe(PersonJvm.FIRST)
                                     it.old.shouldBe("sasa")
                                     it.new.shouldBe("sascha")
                                 }

@@ -15,7 +15,6 @@ import javax.lang.model.element.TypeElement
 import javax.lang.model.type.DeclaredType
 import javax.lang.model.type.TypeMirror
 import kotlin.reflect.KClass
-import kotlin.reflect.full.memberProperties
 
 abstract class Generator {
     abstract fun generate(type: TypeElement, processingEnvironment: ProcessingEnvironment, roundEnvironment: RoundEnvironment): FileSpec?
@@ -25,6 +24,15 @@ val log = KotlinLogging.logger { }
 
 operator fun TypeElement.contains(annotation: KClass<*>) = annotation.qualifiedName in annotationMirrors.map { it.annotationType.toString() }
 operator fun ExecutableElement.contains(annotation: KClass<*>) = annotation.qualifiedName in annotationMirrors.map { it.annotationType.toString() }
+
+val KClass<*>.asPropertyMeta : KClass<*>
+  get() = when(this) {
+      Long::class -> LongPropertyMeta::class
+      Int::class -> IntPropertyMeta::class
+      String::class -> StringPropertyMeta::class
+      Double::class -> DoublePropertyMeta::class
+      else -> ReferenceProperty::class
+  }
 
 class JvmGenerator : Generator() {
     data class Hierarchy(val parent: DeclaredType?, val base: DeclaredType, val idType: TypeMirror) {
@@ -73,7 +81,8 @@ class JvmGenerator : Generator() {
         val targetName = type.simpleName.toString() + "Jvm"
         val targetPackage = type.qualifiedName.split('.').dropLast(1).joinToString(".") + ".jvm"
 
-        val dont = MemberName("info.kinterest", "DONTDOTHIS")
+        //leave in as a comment coz its a usefull pattern
+        //val dont = MemberName("info.kinterest", "DONTDOTHIS")
 
         val targetClass = ClassName(targetPackage, targetName)
         val base = TypeSpec.classBuilder(targetClass).addSuperinterface(type.asType().asTypeName()).addModifiers(KModifier.OPEN)
@@ -89,7 +98,7 @@ class JvmGenerator : Generator() {
             base.addProperty(PropertySpec.builder("_store", Datastore::class).initializer("_store").build()).addProperty(PropertySpec.builder("id", idKlass).initializer("id").build())
         }
 
-        base.addProperty(PropertySpec.builder("_meta", KIEntityMeta::class, KModifier.OVERRIDE).initializer("$targetName").build())
+        base.addProperty(PropertySpec.builder("_meta", KIEntityMeta::class, KModifier.OVERRIDE).initializer(targetName).build())
 
         val asTransient = FunSpec.builder("asTransient").addModifiers(KModifier.OVERRIDE).returns(KITransientEntity::class.asClassName().parameterizedBy(idKlass.asClassName())).addCode(
                 "return ${type.simpleName}Transient(this)"
@@ -121,13 +130,39 @@ class JvmGenerator : Generator() {
         else builder.initializer("null")
         companion.addProperty(builder.build())
 
-        companion.addProperty(PropertySpec.builder("idType", KClass::class.asTypeName().parameterizedBy(STAR), KModifier.OVERRIDE).initializer("%T::class", idKlass.asTypeName()).build())
+        val idTypeBuilder = PropertySpec.builder("idType", idKlass.asPropertyMeta, KModifier.OVERRIDE)
+        if(idKlass.asPropertyMeta == ReferenceProperty::class) {
+            idTypeBuilder.initializer("%T(\"id\", %T::class, false, true)", idKlass.asPropertyMeta, idKlass)
+        } else {
+            idTypeBuilder.initializer("%T(\"id\", false, true)", idKlass.asPropertyMeta)
+        }
+
+        companion.addProperty(idTypeBuilder.build())
         companion.addProperty(PropertySpec.builder("idGenerated", Boolean::class, KModifier.OVERRIDE).initializer("$idGenerated").build())
 
 
+        props.forEach {
+            val pspec = PropertySpec.builder(it.upperCase, it.type.asKClass().asPropertyMeta)
+                    .mutable(false)
+            if(it.type.asKClass().asPropertyMeta == ReferenceProperty::class) {
+                pspec.initializer("%T(\"${it.name}\", %T, ${it.nullable}, ${it.readOnly})", it.type.asKClass().asPropertyMeta, it.type.asKClass().asPropertyMeta)
+            } else {
+                pspec.initializer("%T(\"${it.name}\", ${it.nullable}, ${it.readOnly})", it.type.asKClass().asPropertyMeta)
+            }
+            companion.addProperty(
+                    pspec
+
+                    .build())
+        }
+
         companion.addProperty(
-                PropertySpec.builder("properties", Map::class.asClassName().parameterizedBy(PropertyName::class.asTypeName(),
-                        PropertyMeta::class.asTypeName()), KModifier.OVERRIDE).initializer("mapOf()").build()
+                PropertySpec.builder("properties", Map::class.asClassName().parameterizedBy(String::class.asTypeName(),
+                        PropertyMeta::class.asTypeName()), KModifier.OVERRIDE).initializer("mapOf(${
+                
+                props.map { "\"${it.name}\" to ${it.upperCase}" }.joinToString(",")
+                })${
+                  if(hierarchy.parent!=null) " + " + hierarchy.parentAsType!!.asClassName("jvm", "Jvm") + ".properties" else ""
+                }").build()
         )
         companion.addFunction(
                 FunSpec.builder("instance").addTypeVariable(TypeVariableName("ID", bounds = listOf(Any::class))).addModifiers(KModifier.OVERRIDE).addParameter("_store", Datastore::class).addParameter("id", Any::class).addCode("return $targetName(_store, id as %T) as KIEntity<ID>", idKlass.asTypeName()).returns(KIEntity::class.asClassName().parameterizedBy(TypeVariableName.invoke("ID"))).build())
@@ -147,27 +182,28 @@ class JvmGenerator : Generator() {
         base.addType(companion.build())
 
         val mutableMap = ClassName("kotlin.collections", "MutableMap")
-        val transient = createTransient(type, hierarchy, idKlass, mutableMap, dont, props, targetName, targetClass)
+        val transient = createTransient(type, hierarchy, idKlass, mutableMap, props, targetName, targetClass)
 
         return FileSpec.builder(targetPackage, targetName).addType(base.build()).addType(transient.build()).build()
     }
 
-    private fun createTransient(type: TypeElement, hierarchy: Hierarchy, idKlass: KClass<*>, mutableMap: ClassName, dont: MemberName, props: List<PropertyDescriptor>, targetName: String, targetClass: ClassName): TypeSpec.Builder {
+    private fun createTransient(type: TypeElement, hierarchy: Hierarchy, idKlass: KClass<*>, mutableMap: ClassName, props: List<PropertyDescriptor>, targetName: String, targetClass: ClassName): TypeSpec.Builder {
         val transient = TypeSpec.classBuilder("${type.simpleName}Transient").addModifiers(KModifier.OPEN)
 
         if (hierarchy.parentAsType != null) {
             val pt = hierarchy.parentAsType
             val cn = pt!!.asClassName("jvm", "Transient")
             transient.superclass(cn)
-            transient.addSuperclassConstructorParameter("_id")
             transient.addSuperclassConstructorParameter("properties")
-            transient.primaryConstructor(FunSpec.constructorBuilder().addParameter(ParameterSpec("_id", idKlass.asTypeName().copy(true))).addParameter(ParameterSpec("properties", mutableMap.parameterizedBy(String::class.asTypeName(), Any::class.asTypeName().copy(true)))).build())
+            transient.primaryConstructor(FunSpec.constructorBuilder()
+                    .addParameter(ParameterSpec("properties", mutableMap.parameterizedBy(String::class.asTypeName(),
+                            Any::class.asTypeName().copy(true))))
+                    .build())
         } else {
             transient.addSuperinterface(KITransientEntity::class.asClassName().parameterizedBy(idKlass.asTypeName()))
-            transient.addProperty(PropertySpec.builder("_id", idKlass.asTypeName().copy(true), KModifier.OVERRIDE).mutable().initializer("_id").build()).build()
-            transient.addProperty(PropertySpec.builder("id", idKlass.asTypeName(), KModifier.OVERRIDE).getter(FunSpec.getterBuilder().addStatement("return _id?:%M()", dont).build()).build())
-
-            transient.primaryConstructor(FunSpec.constructorBuilder().addParameter(ParameterSpec("_id", idKlass.asTypeName().copy(true), KModifier.OVERRIDE)).addParameter(ParameterSpec("properties", mutableMap.parameterizedBy(String::class.asTypeName(), Any::class.asTypeName().copy(true)), KModifier.OVERRIDE)).build())
+            transient.primaryConstructor(FunSpec.constructorBuilder()
+                    .addParameter(ParameterSpec("properties", mutableMap.parameterizedBy(String::class.asTypeName(), Any::class.asTypeName()
+                            .copy(true)), KModifier.OVERRIDE)).build())
             transient.addProperty(PropertySpec.builder("properties", mutableMap.parameterizedBy(String::class.asTypeName(), Any::class.asTypeName().copy(true))).initializer("properties").build())
         }
 
@@ -181,18 +217,46 @@ class JvmGenerator : Generator() {
         transient.addProperty(PropertySpec.builder("_meta", KIEntityMeta::class, KModifier.OVERRIDE).initializer(targetName).build())
         val nostore = MemberName("info.kinterest.datastore", "NOSTORE")
         transient.addProperty(PropertySpec.builder("_store", Datastore::class, KModifier.OVERRIDE).initializer("%M", nostore).build())
-        val propsCode = "mutableMapOf(${props.joinToString(",") { CodeBlock.builder().add("%S to entity.${it.name}", it.name).build().toString() }})"
+        val propsCode = "mutableMapOf<String, Any?>(${props.joinToString(",") { CodeBlock.builder().add("%S to entity.${it.name}", it.name).build().toString() }})"
 
-        transient.addFunction(FunSpec.constructorBuilder().addParameter("entity", targetClass).callThisConstructor("entity.id", propsCode).build())
-        transient.addFunction(FunSpec.builder("asTransient").addModifiers(KModifier.OVERRIDE).addStatement("return ${type.simpleName}Transient(_id, properties)").build())
-        if (hierarchy.parent == null)
-            transient.addFunction(FunSpec.builder("getValue").addModifiers(KModifier.OVERRIDE).addTypeVariable(TypeVariableName("V")).addParameter("name", PropertyName::class).returns(TypeVariableName("V")).addCode("return DONTDOTHIS()").build())
+        transient.addFunction(FunSpec.constructorBuilder().addParameter("entity", targetClass).callThisConstructor(propsCode).build())
+        fun createPropsPatameters(funSpec: FunSpec.Builder) {
+            props.forEach {
+                funSpec.addParameter(it.name, it.type.asKClass().asTypeName().copy(it.nullable))
+            }
+            funSpec.addParameter(ParameterSpec.builder("id", idKlass.asTypeName().copy(true)).defaultValue("null").build())
+            val ctorProps = "mutableMapOf<String, Any?>(${props.joinToString(",") { 
+                CodeBlock.builder().add("%S to ${it.name}", it.name).build().toString() }
+            }, \"id\" to id)"
+            funSpec.callThisConstructor(ctorProps)
+        }
+
+        val ctorBuilder = FunSpec.constructorBuilder()
+        createPropsPatameters(ctorBuilder)
+        transient.addFunction(ctorBuilder.build())
+
+        transient.addFunction(FunSpec.builder("asTransient").addModifiers(KModifier.OVERRIDE)
+                .addStatement("return ${type.simpleName}Transient(properties)").build())
+
+        /*if (hierarchy.parent == null) {
+            transient.addFunction(FunSpec.builder("getValue").addModifiers(KModifier.OVERRIDE)
+                    .addTypeVariable(TypeVariableName("V")).addParameter("meta", PropertyMeta::class)
+                    .returns(TypeVariableName("V").copy(true))
+                    .addCode("return properties[meta.name] as V?").build())
+            transient.addFunction(FunSpec.builder("setValue").addModifiers(KModifier.OVERRIDE)
+                    .addTypeVariable(TypeVariableName("V"))
+                    .addParameter("meta", PropertyMeta::class)
+                    .addParameter("v", TypeVariableName("V").copy(true))
+                    .addCode("properties[meta.name] = v").build())
+        }*/
+
         return transient
     }
 
     private fun createProperty(it: PropertyDescriptor) = run {
-        val ps = PropertySpec.builder(it.name, it.type.asKClass().asTypeName().copy(it.nullable), KModifier.OVERRIDE).mutable(!it.readOnly).getter(FunSpec.getterBuilder().addStatement("""return getValue(%T("${it.name}")) as %T${if(it.nullable) "?" else ""}""", PropertyName::class, it.type.asKClass()).build())
-        if (!it.readOnly) ps.setter(FunSpec.setterBuilder().addParameter("v", it.type.asKClass()).addStatement("""setValue(%T("${it.name}"), v)""", PropertyName::class).build())
+        val ps = PropertySpec.builder(it.name, it.type.asKClass().asTypeName().copy(it.nullable), KModifier.OVERRIDE).mutable(!it.readOnly)
+                .getter(FunSpec.getterBuilder().addStatement("""return getValue<%T>(${it.upperCase}) as %T${if(it.nullable) "?" else ""}""", it.type.asKClass(), it.type.asKClass()).build())
+        if (!it.readOnly) ps.setter(FunSpec.setterBuilder().addParameter("v", it.type.asKClass()).addStatement("""setValue(${it.upperCase}, v)""", String::class).build())
         ps.build()
     }
 }
@@ -209,9 +273,6 @@ fun TypeMirror.asKClass() = asTypeName().toString().run {
 }
 
 class PropertyDescriptor(getter: ExecutableElement, enclosedBy: TypeElement) {
-    init {
-        log.trace {  }
-    }
     val name: String = run {
         val pname = getter.simpleName.toString().substring(3)
         pname.replaceRange(0, 1, "${pname.get(0).toLowerCase()}")
@@ -222,6 +283,8 @@ class PropertyDescriptor(getter: ExecutableElement, enclosedBy: TypeElement) {
         it.simpleName.startsWith("s" + getter.simpleName.substring(1))
     }.isEmpty()
     val type: TypeMirror = getter.returnType
+
+    val upperCase : String get() = name.map { if(it.isUpperCase()) "_$it" else "$it" }.joinToString("").toUpperCase()
 
     override fun toString(): String = "property: $name ro: $readOnly type: $type"
 }

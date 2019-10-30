@@ -3,8 +3,7 @@ package info.kinterest
 import info.kinterest.datastore.Datastore
 import info.kinterest.entity.KIEntity
 import info.kinterest.entity.KIEntityMeta
-import info.kinterest.entity.PropertyName
-
+import info.kinterest.entity.PropertyMeta
 
 sealed class DatastoreEvent(val ds:Datastore)
 class DatastoreStarted(ds: Datastore) : DatastoreEvent(ds)
@@ -19,7 +18,7 @@ class EntitiesDeleted<ID:Any>(meta: KIEntityMeta, val entities:Set<ID>) : Entiti
     override fun toString(): String = "${super.toString()} deleted ${entities}"
 }
 sealed class EntityEvent<ID:Any, E:KIEntity<ID>>(meta: KIEntityMeta, val entity:E) : EntitiesEvent(meta)
-data class UpdateEvent<T>(val property: PropertyName, val old:T, val new:T) {
+data class UpdateEvent<T>(val property: PropertyMeta, val old:T, val new:T) {
     override fun toString(): String = "$property: old = $old new = $new"
 }
 class EntityUpdated<ID:Any, E:KIEntity<ID>>(meta: KIEntityMeta, entity: E, val updates:List<UpdateEvent<*>>) : EntityEvent<ID,E>(meta, entity) {

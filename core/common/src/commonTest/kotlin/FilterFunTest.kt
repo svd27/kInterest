@@ -14,10 +14,14 @@ class FilterFunTest {
         override val _meta: KIEntityMeta = AEntity
 
         @Suppress("UNCHECKED_CAST")
-        override fun <V> getValue(propertyName: PropertyName): V = when(propertyName.name) {
+        override fun <V> getValue(property: PropertyMeta): V = when(property.name) {
             "name" -> name as V
             "age" -> age as V
             else -> DONTDOTHIS()
+        }
+
+        override fun <V> setValue(property: PropertyMeta, v: V?) {
+            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
         }
 
         override fun asTransient(): KITransientEntity<Long> {
@@ -32,15 +36,15 @@ class FilterFunTest {
                 get() = AEntity::class.qualifiedName!!
             override val type: KClass<*>
                 get() = AEntity::class
-            override val idType: KClass<*>
-                get() = Long::class
+            override val idType: PropertyMeta
+                get() = LongPropertyMeta("", false, true)
             override val idGenerated: Boolean
                 get() = true
             override val parentMeta: KIEntityMeta?
                 get() = null
             override val baseMeta: KIEntityMeta
                 get() = this
-            override val properties: Map<PropertyName, PropertyMeta>
+            override val properties: Map<String, PropertyMeta>
                 get() = TODO("not implemented") //To change initializer of created properties use File | Settings | File Templates.
 
             override fun <ID : Any> instance(_store: Datastore, id: Any): KIEntity<ID> {

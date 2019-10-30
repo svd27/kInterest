@@ -3,13 +3,13 @@ package info.kinterest.generator
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
 import info.kinterest.entity.KIEntityMeta
+import info.kinterest.entity.LongPropertyMeta
 import org.spekframework.spek2.Spek
 import org.spekframework.spek2.style.specification.describe
 import strikt.api.expectThat
-import strikt.assertions.isEqualTo
+import strikt.assertions.isA
 import strikt.assertions.isFalse
 import kotlin.reflect.KClass
-import kotlin.reflect.full.companionObject
 import kotlin.reflect.full.companionObjectInstance
 import kotlin.reflect.full.memberProperties
 
@@ -26,7 +26,7 @@ class GeneratorSpek : Spek({
             interface Test : KIEntity<Long> {
               var name : String
               var age : Int
-              val nvalue : Long?
+              val nValue : Long?
             }
         """.trimIndent())
             it("works without an error") {
@@ -42,6 +42,7 @@ class GeneratorSpek : Spek({
                     messageOutputStream = System.out // see diagnostics in real time
                 }.compile()
 
+
                 val kc = result.classLoader.loadClass("com.example.test.jvm.TestJvm").kotlin
                 val np = kc.memberProperties.find { it.name == "name" }
                 require(np != null)
@@ -51,7 +52,7 @@ class GeneratorSpek : Spek({
 
                 val meta = kc.companionObjectInstance
                 require(meta is KIEntityMeta)
-                expectThat(meta.idType).isEqualTo(Long::class)
+                expectThat(meta.idType).isA<LongPropertyMeta>()
                 expectThat(meta.idGenerated).isFalse()
 
                 assert(result.exitCode == KotlinCompilation.ExitCode.OK)

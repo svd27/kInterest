@@ -1,7 +1,8 @@
 package info.kinterest.datastores.mongo
 
 import com.mongodb.TransactionOptions
-import com.mongodb.client.model.Filters.*
+import com.mongodb.client.model.Filters.`in`
+import com.mongodb.client.model.Filters.eq
 import com.mongodb.client.model.Projections.include
 import com.mongodb.reactivestreams.client.ClientSession
 import com.mongodb.reactivestreams.client.MongoClients
@@ -12,19 +13,19 @@ import info.kinterest.datastore.DatastoreUnknownType
 import info.kinterest.datastore.EventManager
 import info.kinterest.datastores.AbstractDatastore
 import info.kinterest.datastores.IdGenerator
-import info.kinterest.entity.KIEntity
-import info.kinterest.entity.KIEntityMeta
-import info.kinterest.entity.KITransientEntity
-import info.kinterest.entity.PropertyName
+import info.kinterest.entity.*
 import info.kinterest.filter.*
 import info.kinterest.functional.Try
 import info.kinterest.functional.suspended
-import kotlinx.coroutines.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitLast
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mu.KotlinLogging
@@ -91,10 +92,11 @@ class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : Abstract
             collections[meta] = db.getCollection(name)
             metas[meta.name] = meta
             if (meta.idGenerated) {
-                if (meta.idType != ObjectId::class) {
-                    when (meta.idType) {
-                        Long::class -> idGenerators.getOrPut(meta.baseMeta, { LongGenerator(meta.baseMeta.type.qualifiedName!!) })
-                        else -> throw DatastoreException(this, "unsupported type for autogenerate ${meta.idType}")
+                val idType = meta.idType
+                if (idType !is ReferenceProperty || idType.type != ObjectId::class) {
+                    when (idType) {
+                        is LongPropertyMeta -> idGenerators.getOrPut(meta.baseMeta, { LongGenerator(meta.baseMeta.type.qualifiedName!!) })
+                        else -> throw DatastoreException(this, "unsupported type for autogenerate $idType")
                     }
                 }
             }
@@ -129,18 +131,21 @@ class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : Abstract
         val _meta = es[0]._meta
 
         val includeId = if (_meta.idGenerated) {
-            if (_meta.idType != ObjectId::class) {
+            if (_meta.idType !is ReferenceProperty || _meta.idType.type != ObjectId::class) {
                 val gen = idGenerators.getOrElse(_meta) { throw DatastoreException(this, "no generator found for $_meta") }
-                es.forEach { it._id = gen.next() as ID }
+                es.forEach {
+                    @Suppress("UNCHECKED_CAST")
+                    it._id = gen.next() as ID
+                }
                 true
             } else false
         } else true
         val docs: List<Document> = es.fold(listOf()) { acc, e ->
-            acc + e.properties.entries.fold(Document()) { doc, p ->
-                doc.append(p.key, p.value);
+            acc + e.properties.entries.filter { it.key != "id" }.fold(Document()) { doc, p ->
+                doc.append(p.key, p.value)
             }.also {
                 if (includeId) it.append("_id", e._id)
-                val metaInfo = e._meta.initMetaBlock()
+                val metaInfo = e._meta.metaBlock
                 it.append(METAKEY, metaInfo.asMap())
                 log.trace { "document $it" }
             }
@@ -161,26 +166,26 @@ class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : Abstract
         val type = es[0]._meta
         val collection = getCollection(type)
 
-        val ids: Set<ID> = es.map { it.id as ID }.toSet()
+        val ids: Set<ID> = es.map { it.id }.toSet()
         val result = collection.deleteMany(`in`("_id", ids)).awaitLast()
         if (result.deletedCount == es.size.toLong()) ids else {
             retrieve(type, ids).map {
                 it.fold(ids) { acc, e ->
+                    @Suppress("UNCHECKED_CAST")
                     acc - (e.id as ID)
                 }
             }.fold({ throw it }) { it }
         }.apply { events.entitiesDeleted(type, this) }
     }
 
-    override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyName>): Try<Collection<Pair<PropertyName, Any?>>> = Try.suspended(GlobalScope) {
+    override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyMeta>): Try<Collection<Pair<PropertyMeta, Any?>>> = Try.suspended(GlobalScope) {
         val coll = getCollection(type)
         val doc = coll.find(Document("_id", id)).projection(include(props.map { it.name })).awaitLast()
         props.map { name -> name to doc[name.name] }
     }
 
-    override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyName, Any?>): Try<Unit> = Try.suspended(GlobalScope) {
+    override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyMeta, Any?>): Try<Unit> = Try.suspended(GlobalScope) {
         val coll = getCollection(type)
-        val txCfg = TransactionOptions.builder().build()
         if (props.isEmpty()) return@suspended
 
         val old = coll.find(Document("_id", id)).projection(include(props.map { (name, _) -> name.name })).awaitFirstOrNull()
@@ -234,6 +239,7 @@ class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : Abstract
 }
 
 
+@ExperimentalCoroutinesApi
 val FilterWrapper<*,*>.pipeline : List<Document>
   get() = listOf(Document("\$match", Document("\$and", listOf(
           eq("${MongoDatastore.METAKEY}.${KIEntityMeta.TYPESKEY}", meta.name),

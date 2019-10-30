@@ -37,6 +37,9 @@ kapt {
 
 
 tasks.test {
+    if("windows" in System.getProperty("os.name").toLowerCase()) {
+        environment("DOCKER_HOST", "tcp://127.0.0.1:2375")
+    }
     systemProperty("io.netty.tryReflectionSetAccessible", false)
     testLogging {
         events("failed", "skipped", "passed")

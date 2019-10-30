@@ -2,11 +2,12 @@ package info.kinterest.datastores.tests
 
 import info.kinterest.datastore.Datastore
 import info.kinterest.datastores.tests.jvm.PersonTransient
-import io.kotlintest.*
+import io.kotlintest.forAll
 import io.kotlintest.matchers.collections.shouldContain
 import io.kotlintest.matchers.collections.shouldHaveSize
 import io.kotlintest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.provided.ProjectConfig
+import io.kotlintest.shouldBe
 import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
@@ -26,7 +27,7 @@ class CrudSpec : FreeSpec({
             val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "ds1"))
             runBlocking { ds.register(info.kinterest.datastores.tests.jvm.PersonJvm) }
             "inserting an entity" - {
-                val pt = PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa"))
+                val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa"))
                 val pe = runBlocking {
                     ds.create(pt).fold({ throw it }) {
                         require(it.size == 1); it.size.shouldBe(1); it.first()
@@ -46,7 +47,7 @@ class CrudSpec : FreeSpec({
                 val datastore : Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "dsdel1"))
                 runBlocking { datastore.register(info.kinterest.datastores.tests.jvm.PersonJvm) }
 
-                val pt = PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa"))
+                val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa"))
                 val pe = runBlocking { datastore.create(pt).fold({throw it}) { assert(it.size==1); it.first()} }
                 require(pe is Person)
                 "creating should work" - {

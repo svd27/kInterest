@@ -20,8 +20,8 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.5.2")
     testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
-    testImplementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:2.2.0")
     kaptTest(project(":core:generator", "default"))
+    testImplementation(project(":docker:docker-client", "default"))
 }
 
 kapt {

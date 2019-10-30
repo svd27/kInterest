@@ -41,6 +41,8 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
 
     val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply {
         addresses = cfg.addresses
+
+        //TODO: make this configurable
         setSmartRouting(false)
     }))
     val dbLock : Mutex = Mutex()
@@ -67,7 +69,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
             metas[meta.name] = meta
             if(meta.idGenerated) {
                 when(meta.idType) {
-                    Long::class -> if(!idGenerators.containsKey(meta.baseMeta)) {
+                    is LongPropertyMeta -> if(!idGenerators.containsKey(meta.baseMeta)) {
                         idGenerators[meta.baseMeta] = LongGenerator(meta.baseMeta.type.qualifiedName!!)
                     }
                     else -> throw DatastoreException(this, "ids of type ${meta.idType} not supported")
@@ -96,7 +98,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
         es.map {
             val kiEntityMeta = it._meta
             require(kiEntityMeta is KIEntityMetaJvm)
-            val metaInfo = kiEntityMeta.initMetaBlock()
+            val metaInfo = kiEntityMeta.metaBlock
             val types = metaInfo.types
             val metaInfType = types.joinToString(separator = ",") { it.name }
             val metaMap = mapOf(KIEntityMeta.TYPEKEY to metaInfo.type.name, KIEntityMeta.TYPESKEY to metaInfo.types.map { it.name }, KIEntityMeta.RELATIONSKEY to metaInfo.relations)
@@ -104,7 +106,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
             val id = if(kiEntityMeta.idGenerated) {
                 idGenerator(kiEntityMeta).next()
             } else it._id!!
-            val properties = it.properties + (METAINFO to metaMap) + (METAINFO_TYPE to metaInfType)
+            val properties = it.properties.filter { it.key != "id" } + (METAINFO to metaMap) + (METAINFO_TYPE to metaInfType)
             log.debug { "create json: ${klaxon.toJsonString(properties)}" }
             collection.put(id, HazelcastJsonValue(klaxon.toJsonString(
                     //TODO: the filter should not be neccessary
@@ -129,7 +131,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
         es.map { collection.remove(it.id); it.id }.toSet().apply { events.entitiesDeleted(meta, this) }
     }
 
-    override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyName>): Try<Collection<Pair<PropertyName, Any?>>> = Try.suspended(GlobalScope) {
+    override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyMeta>): Try<Collection<Pair<PropertyMeta, Any?>>> = Try.suspended(GlobalScope) {
         val collection = collection(type)
         val entity = collection.get(id)?:throw DatastoreKeyNotFound(type, id, this)
         val map = klaxon.parse<Map<String,Any?>>(entity.toString())?: mapOf()
@@ -139,14 +141,14 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
         props.map { it to map.get(it.name)}
     }
 
-    override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyName, Any?>): Try<Unit> = Try.suspended(GlobalScope) {
+    override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyMeta, Any?>): Try<Unit> = Try.suspended(GlobalScope) {
         val collection = collection(type)
         val json = collection.get(id)?:throw DatastoreKeyNotFound(type, id, this)
         val entity = klaxon.parse<MutableMap<String,Any?>>(json.toString())!!
-        val upds = props.map { (name, value) ->
-            val old = entity[name.name]
-            entity[name.name] = value
-            name to (old to value)
+        val upds = props.map { (property, value) ->
+            val old = entity[property.name]
+            entity[property.name] = value
+            property to (old to value)
         }
         collection.put(id, HazelcastJsonValue(klaxon.toJsonString(entity)))
         events.entityUpdated<Any, KIEntity<Any>>(type.instance(this, id), upds)

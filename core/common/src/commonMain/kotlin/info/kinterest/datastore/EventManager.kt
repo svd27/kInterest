@@ -3,7 +3,7 @@ package info.kinterest.datastore
 import info.kinterest.*
 import info.kinterest.entity.KIEntity
 import info.kinterest.entity.KIEntityMeta
-import info.kinterest.entity.PropertyName
+import info.kinterest.entity.PropertyMeta
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BroadcastChannel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -32,7 +32,7 @@ interface EventManager {
                 entityChannels.getOrElse(meta.baseMeta) {
                     val broadcastChannel = BroadcastChannel<EntitiesEvent>(100)
                     log.info { "created $broadcastChannel for $meta with base ${meta.baseMeta}" }
-                    entityChannels += meta.baseMeta to broadcastChannel
+                    entityChannels = entityChannels + (meta.baseMeta to broadcastChannel)
                     broadcastChannel
                 }
             }
@@ -53,7 +53,7 @@ interface EventManager {
         getEntityBroadcast(meta).send(EntitiesDeleted(meta, entities))
     }
 
-    suspend fun <ID : Any, E : KIEntity<ID>> entityUpdated(e: E, updates: List<Pair<PropertyName, Pair<Any?, Any?>>>) {
+    suspend fun <ID : Any, E : KIEntity<ID>> entityUpdated(e: E, updates: List<Pair<PropertyMeta, Pair<Any?, Any?>>>) {
         if(updates.isEmpty()) return
         getEntityBroadcast(e._meta).send(EntityUpdated<ID, E>(e._meta, e, updates.map { (prop, oldNew) ->
             val (old, new) = oldNew

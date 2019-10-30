@@ -8,12 +8,11 @@ import info.kinterest.docker.client.LogWaitStrategy
 import info.kinterest.functional.getOrElse
 import kotlinx.coroutines.*
 import mu.KotlinLogging
-import java.lang.IllegalStateException
 import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.random.Random
 
-class MongoCluster(private val client: DockerClient, version: String = "latest", private val duration: Duration = Duration.ofSeconds(10)) {
+class MongoCluster(private val client: DockerClient, version: String = "latest", private val duration: Duration = Duration.ofSeconds(25)) {
     private val log = KotlinLogging.logger { }
     private val coroutineDispatcher = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
     private val scope : CoroutineScope = CoroutineScope(coroutineDispatcher)

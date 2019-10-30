@@ -37,7 +37,7 @@ class QuerySpec : FreeSpec({
             "querying for a single entity" - {
                 val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}ds1"))
                 ds.register(PersonJvm)
-                val pt = PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
+                val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
                 val pe = ds.create(pt).fold({ throw it }) { assert(it.size == 1); it.first() }
                 require(pe is Person)
                 pe.name.shouldBe("djuric")
@@ -60,10 +60,10 @@ class QuerySpec : FreeSpec({
                 ds.register(info.kinterest.datastores.tests.jvm.EmployeeJvm)
                 ds.register(info.kinterest.datastores.tests.jvm.ManagerJvm)
 
-                val pt = PersonTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
+                val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
 
-                val ee = EmployeeTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000))
-                val me = ManagerTransient(null, mutableMapOf("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000, "department" to null))
+                val ee = EmployeeTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000))
+                val me = ManagerTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000, "department" to null))
                 val crtRes = ds.create(pt, ee, me).fold({ throw it }) { it }
                 crtRes.shouldHaveSize(3)
 

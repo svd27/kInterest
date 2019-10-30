@@ -2,19 +2,19 @@ package info.kinterest.entity
 
 import info.kinterest.functional.Try
 import kotlinx.coroutines.runBlocking
-import java.lang.IllegalStateException
 
 interface KIEntityJvm<ID:Any> : KIEntity<ID> {
-    override fun<V> getValue(prop:PropertyName) : V = runBlocking {
-        _store.getValues(_meta, id, setOf(prop)).fold({throw it}) {
+    @Suppress("UNCHECKED_CAST")
+    override fun<V> getValue(property:PropertyMeta) : V = runBlocking {
+        _store.getValues(_meta, id, setOf(property)).fold({throw it}) {
             Try {
-                it.firstOrNull()?.second?:throw IllegalStateException("$prop not found in ${_meta.type} with id $id")
+                it.firstOrNull()?.second?:throw IllegalStateException("$property not found in ${_meta.type} with id $id")
             }.fold({throw it}) {it} as V
         }
     }
 
-    fun setValue(prop: PropertyName, value:Any?) = runBlocking {
-        _store.setValues(_meta, id, mapOf(prop to value)).fold({throw it}) {Unit}
+    override fun<V> setValue(property: PropertyMeta, v:V?) = runBlocking {
+        _store.setValues(_meta, id, mapOf(property to v)).fold({throw it}) {Unit}
     }
 }
 

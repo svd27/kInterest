@@ -2,7 +2,7 @@ package info.kinterest.filter
 
 import info.kinterest.entity.KIEntity
 import info.kinterest.entity.KIEntityMeta
-import info.kinterest.entity.PropertyName
+import info.kinterest.entity.PropertyMeta
 
 sealed class Filter<ID:Any,E:KIEntity<ID>>(val meta: KIEntityMeta) {
     abstract fun matches(e:E) : Boolean
@@ -30,6 +30,7 @@ class AndFilter<ID:Any,E:KIEntity<ID>>(meta: KIEntityMeta, operands:Iterable<Fil
 
     override fun inverse(): Filter<ID, E> = OrFilter(meta, content.map { !it })
 
+    @Suppress("UNCHECKED_CAST")
     override fun and(f: Filter<ID, E>): AndFilter<ID, E> =
             if(f is AndFilter<*,*>) AndFilter(meta, content+(f.content as Iterable<Filter<ID,E>>)) else
                 AndFilter(meta, content+f)
@@ -48,23 +49,24 @@ class OrFilter<ID:Any,E:KIEntity<ID>>(meta: KIEntityMeta, operands:Iterable<Filt
 
     override fun inverse(): Filter<ID, E> = AndFilter(meta, content.map { !it })
 
+    @Suppress("UNCHECKED_CAST")
     override fun or(f: Filter<ID, E>): OrFilter<ID, E> = if(f is OrFilter<*,*>) OrFilter(meta, content+(f.content as Iterable<Filter<ID,E>>)) else
         OrFilter(meta, content+f)
 }
 
-sealed class PropertyFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, val prop : PropertyName) : Filter<ID,E>(meta)
-sealed class ComparisonFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, prop: PropertyName, val value : Comparable<V>) : PropertyFilter<ID,E,V>(meta, prop) {
+sealed class PropertyFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, val prop : PropertyMeta) : Filter<ID,E>(meta)
+sealed class ComparisonFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, prop: PropertyMeta, val value : Comparable<V>) : PropertyFilter<ID,E,V>(meta, prop) {
     abstract fun compare(v1:Comparable<V>,v2: V?) : Boolean
 
     override fun matches(e: E): Boolean = compare(value, e.getValue<V>(prop))
 }
-class GTFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, prop: PropertyName, value : Comparable<V>) : ComparisonFilter<ID,E,V>(meta, prop, value) {
+class GTFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, prop: PropertyMeta, value : Comparable<V>) : ComparisonFilter<ID,E,V>(meta, prop, value) {
     override fun inverse(): Filter<ID, E> = GTFilter(meta, prop, value)
 
     override fun compare(v1: Comparable<V>, v2: V?): Boolean = if(v2 == null) true else v1 <= v2
 }
 
-class LTFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, prop: PropertyName, value : Comparable<V>) : ComparisonFilter<ID,E,V>(meta, prop, value) {
+class LTFilter<ID:Any,E:KIEntity<ID>,V>(meta: KIEntityMeta, prop: PropertyMeta, value : Comparable<V>) : ComparisonFilter<ID,E,V>(meta, prop, value) {
     override fun inverse(): Filter<ID, E> = GTFilter(meta, prop, value)
 
     override fun compare(v1: Comparable<V>, v2: V?): Boolean = if(v2 == null) true else v1 >= v2
@@ -82,8 +84,8 @@ class FilterWrapper<ID:Any,E:KIEntity<ID>>(val f : Filter<ID,E>) : Filter<ID,E>(
 
         infix fun Filter<ID,E>.and(f:Filter<ID,E>)  : Filter<ID,E> = AndFilter(meta, listOf(this, f)).run { current=this; this }
         infix fun Filter<ID,E>.or(f:Filter<ID,E>)  : Filter<ID,E> = OrFilter(meta, listOf(this, f)).run { current=this; this }
-        infix fun Int.gte(prop:String) : Filter<ID,E> = LTFilter<ID,E,Int>(meta, PropertyName(prop), this as Comparable<Int>).run { current=this; this }
-        infix fun Int.lte(prop:String) : Filter<ID,E> = GTFilter<ID,E,Int>(meta, PropertyName(prop), this as Comparable<Int>).run { current=this; this }
+        infix fun Int.gte(prop:String) : Filter<ID,E> = LTFilter<ID,E,Int>(meta, meta.properties[prop]!!, this as Comparable<Int>).run { current=this; this }
+        infix fun Int.lte(prop:String) : Filter<ID,E> = GTFilter<ID,E,Int>(meta, meta.properties[prop]!!, this as Comparable<Int>).run { current=this; this }
     }
 }
 
