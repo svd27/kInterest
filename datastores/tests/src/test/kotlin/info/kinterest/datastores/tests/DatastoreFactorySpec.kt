@@ -27,10 +27,11 @@ class DatastoreFactorySpec : StringSpec({
     "given a datasource" {
         forAll(ProjectConfig.datastores) { datastore ->
             val fac : DatastoreFactory by kodein.instance()
-            val cfg : DatastoreConfig by kodein.on(ProjectConfig).instance(arg = M(datastore, "ds1"))
+            val name = "${datastore}dfspec"
+            val cfg : DatastoreConfig by kodein.on(ProjectConfig).instance(arg = M(datastore, name))
             val listener = ChannelListener(fac.events.datastore.openSubscription())
             fac.create(cfg).shouldNotBeNull()
-            runBlocking { listener.expect { it is DatastoreStarted  } }.asClue {
+            runBlocking { listener.expect { it is DatastoreStarted && it.ds.name ==  name} }.asClue {
                 it.shouldBeInstanceOf<DatastoreStarted>()
                 it.ds.name.shouldBe("ds1")
             }
