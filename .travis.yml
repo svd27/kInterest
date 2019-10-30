@@ -3,10 +3,12 @@ language: java
 services:
   - docker
 
-before_cache:
-  - echo docker stuff
+before_install:
+  - echo -e "docker stuff"
   - docker ps -a
   - echo $DOCKER_HOST
+
+before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
   - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
 cache:
