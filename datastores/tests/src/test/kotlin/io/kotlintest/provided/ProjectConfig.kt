@@ -16,7 +16,7 @@ object ProjectConfig : AbstractProjectConfig() {
     val datastores : List<String> = listOf(MongodatastoreConfig.TYPE, HazelcastConfig.TYPE)
     private val log = KotlinLogging.logger { }
 
-    override fun parallelism(): Int = 2
+    override fun parallelism(): Int = 1
 
     init {
         log.info { "TMPDIR: ${System.getProperty("java.io.tmpdir")}" }
