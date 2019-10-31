@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.lang.Integer.max
 
 plugins {
     kotlin("jvm")
@@ -41,6 +42,11 @@ tasks.test {
         environment("DOCKER_HOST", "tcp://127.0.0.1:2375")
     }
     systemProperty("io.netty.tryReflectionSetAccessible", false)
+
+    systemProperties["junit.jupiter.execution.parallel.enabled"] = true
+    maxParallelForks = max(Runtime.getRuntime().availableProcessors() / 2, 1)
+    setForkEvery(1)
+
     testLogging {
         events("failed", "skipped", "passed")
         exceptionFormat = TestExceptionFormat.FULL
