@@ -50,4 +50,10 @@ kotlin {
             implementation("io.github.microutils:kotlin-logging-js:1.7.6")
         }
     }
+
+    js().compilations["test"].defaultSourceSet {
+        dependencies {
+            implementation(kotlin("test-js"))
+        }
+    }
 }
