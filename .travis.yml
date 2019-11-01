@@ -8,13 +8,13 @@ before_install:
   - docker ps -a
   # - export DOCKER_HOST=`docker run --network host eclipse/che-ip`
   - echo $DOCKER_HOST
-  - sudo ip link add dummy0 type dummy
-  - sudo ip link set dev dummy0 up
+  - sudo ip link add dummy1 type dummy
+  - sudo ip link set dev dummy1 up
   - ip link show type dummy
 
   - sudo ip addr add 169.254.1.1/32 dev dummy0
-  - sudo ip link set dev dummy0 up
-  - ip addr show dev dummy0
+  - sudo ip link set dev dummy1 up
+  - ip addr show dev dummy1
 
   - cat /etc/hosts
   - echo "169.254.1.1 host.docker.internal" >> /etc/hosts
