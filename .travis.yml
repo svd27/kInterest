@@ -17,7 +17,7 @@ before_install:
   - ip addr show dev dummy1
 
   - cat /etc/hosts
-  - echo "169.254.1.1 host.docker.internal" >> /etc/hosts
+  - sudo echo "169.254.1.1 host.docker.internal" >> /etc/hosts
   - cat /etc/hosts
 
 
