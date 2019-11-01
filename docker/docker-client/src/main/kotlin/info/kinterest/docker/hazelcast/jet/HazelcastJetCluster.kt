@@ -20,13 +20,18 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
     private val log = KotlinLogging.logger { }
     private val coroutineDispatcher = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
     private val scope: CoroutineScope = CoroutineScope(coroutineDispatcher)
+    val hostenv = System.getenv("DOCKER_CONTAINER_HOST")
+    val docker_ip = if (hostenv!=null && hostenv.isNotEmpty())
+        hostenv
+    else "host.docker.internal"
     val ips: List<String>
         get() = containers.map {
-            "host.docker.internal:${it.value}"
+            "$docker_ip:${it.value}"
         }
     val containers: Map<BaseContainer, Int>
 
     init {
+        log.info { "docker ip: $docker_ip" }
         val rnd = Random(System.currentTimeMillis())
         val nwname = "hccpnw${rnd.nextInt(99999)}"
         val nw = client.createNetworkCmd().withDriver("bridge").withName(nwname).exec().id
@@ -44,10 +49,6 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
         }))
 
         val portStart = rnd.nextInt(32000, 40000)
-        val hostenv = System.getenv("DOCKER_CONTAINER_HOST")
-        val docker_ip = if (hostenv!=null && hostenv.isNotEmpty() ?: false)
-            hostenv
-        else "host.docker.internal"
         repeat(3) {
             val port = portStart + it
 
