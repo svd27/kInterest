@@ -11,6 +11,7 @@ import info.kinterest.docker.client.DockerClientConfigProvider
 import info.kinterest.functional.Try
 import mu.KotlinLogging
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import strikt.api.expectThat
@@ -20,6 +21,7 @@ import java.time.Duration
 import java.time.temporal.ChronoUnit
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Disabled
 internal class HazelcastClusterTest {
     private val log = KotlinLogging.logger {  }
     lateinit var client : DockerClient
