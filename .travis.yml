@@ -6,7 +6,20 @@ services:
 before_install:
   - echo -e "docker stuff"
   - docker ps -a
+  # - export DOCKER_HOST=`docker run --network host eclipse/che-ip`
   - echo $DOCKER_HOST
+  - sudo ip link add dummy0 type dummy
+  - sudo ip link set dev dummy0 up
+  - ip link show type dummy
+
+  - sudo ip addr add 169.254.1.1/32 dev dummy0
+  - sudo ip link set dev dummy0 up
+  - ip addr show dev dummy0
+
+  - cat /etc/hosts
+  - echo "169.254.1.1 host.docker.internal" >> /etc/hosts
+  - cat /etc/hosts
+
 
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock

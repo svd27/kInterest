@@ -4,10 +4,10 @@ import com.beust.klaxon.Klaxon
 import com.hazelcast.client.HazelcastClient
 import com.hazelcast.client.config.ClientConfig
 import com.hazelcast.client.config.ClientNetworkConfig
+import com.hazelcast.config.GroupConfig
 import com.hazelcast.core.HazelcastJsonValue
 import com.hazelcast.core.IMap
 import com.hazelcast.query.Predicate
-import com.hazelcast.query.PredicateBuilder
 import com.hazelcast.query.Predicates
 import info.kinterest.datastore.*
 import info.kinterest.datastores.AbstractDatastore
@@ -18,15 +18,18 @@ import info.kinterest.functional.Try
 import info.kinterest.functional.suspended
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mu.KotlinLogging
 
 class HazelcastConfig(name: String, config : Map<String,Any>) : DatastoreConfig(TYPE, name, config) {
-    constructor(name:String, addresses : List<String>) : this(name, mapOf("addresses" to addresses))
+    constructor(name:String, addresses : List<String>, group: String) : this(name, mapOf("addresses" to addresses, "group" to group))
 
     val addresses : List<String> by config
+    val group : String by config
 
     companion object {
         const val TYPE = "hazelcast"
@@ -41,10 +44,9 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
 
     val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply {
         addresses = cfg.addresses
-
         //TODO: make this configurable
         setSmartRouting(false)
-    }))
+    }).setGroupConfig(GroupConfig(cfg.group)))
     val dbLock : Mutex = Mutex()
     val collections = mutableMapOf<KIEntityMeta, IMap<Any,HazelcastJsonValue>>()
     val metas : MutableMap<String,KIEntityMeta> = mutableMapOf()
@@ -155,14 +157,16 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
         Unit
     }
 
-    override suspend fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Iterable<E>> = Try.suspended {
+    override fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Flow<E>> = Try {
         val collection = collection(f.meta)
         val typePredicate = Predicates.ilike(METAINFO_TYPE, "%${f.meta.name}%")
         val predicate = Predicates.and(typePredicate, f.predicate)
         log.debug { "query ${collection.name} predicate: $predicate" }
-        collection.entrySet (predicate).map {
-            deserialise<E, ID>(it.key, it.value)
-        }.apply { log.trace { "returning $this" } }
+        flow<E> {
+            collection.entrySet(predicate).forEach {
+                emit(deserialise(it.key, it.value))
+            }.apply { log.trace { "returning $this" } }
+        }
     }
 
     private fun <E : KIEntity<ID>, ID : Any> deserialise(id:Any, value : HazelcastJsonValue): E {
@@ -186,7 +190,7 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
 
     @Suppress("UNCHECKED_CAST")
     val Filter<*, *>.predicate: Predicate<String, Any?>
-        get() = PredicateBuilder().entryObject.let { e ->
+        get() = run {
             when (this) {
                 is FilterWrapper<*, *> -> f.predicate
                 is LogicalFilter<*, *> -> when (this) {

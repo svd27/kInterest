@@ -33,7 +33,7 @@ class FilterFunTest {
 
         companion object : KIEntityMeta {
             override val name: String
-                get() = AEntity::class.qualifiedName!!
+                get() = "AEntity"
             override val type: KClass<*>
                 get() = AEntity::class
             override val idType: PropertyMeta

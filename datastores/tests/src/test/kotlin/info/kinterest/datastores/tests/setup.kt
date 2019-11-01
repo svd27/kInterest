@@ -2,32 +2,31 @@ package info.kinterest.datastores.tests
 
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.command.DockerCmdExecFactory
-import com.github.dockerjava.core.DefaultDockerClientConfig
 import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import info.kinterest.DONTDOTHIS
 import info.kinterest.datastore.Datastore
 import info.kinterest.datastore.DatastoreConfig
-import info.kinterest.datastores.kodeinDatastores
 import info.kinterest.datastores.hazelcast.HazelcastConfig
 import info.kinterest.datastores.hazelcast.HazelcastDatastore
+import info.kinterest.datastores.kodeinDatastores
 import info.kinterest.datastores.mongo.MongoDatastore
 import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.docker.client.DockerClientConfigProvider
-import info.kinterest.docker.hazelcast.HazelcastCluster
+import info.kinterest.docker.hazelcast.jet.HazelcastJetCluster
 import info.kinterest.docker.mongo.MongoCluster
-import io.kotlintest.AbstractProjectConfig
 import io.kotlintest.Spec
 import io.kotlintest.TestCase
 import io.kotlintest.provided.ProjectConfig
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KotlinLogging
 import org.kodein.di.Kodein
-import org.kodein.di.bindings.*
+import org.kodein.di.bindings.Scope
+import org.kodein.di.bindings.ScopeCloseable
+import org.kodein.di.bindings.ScopeRegistry
+import org.kodein.di.bindings.StandardScopeRegistry
 import org.kodein.di.generic.*
-import java.lang.IllegalStateException
 import java.time.Duration
-import kotlin.math.log
 
 interface KodeinCloseable<T> : ScopeCloseable {
     val content: T
@@ -61,13 +60,13 @@ val kodeinMongo = Kodein.Module(name = "mongo") {
 
 @ExperimentalCoroutinesApi
 val kodeinHazelcast = Kodein.Module("hazelcast") {
-    bind<HazelcastCluster>() with scoped(ProjectScope).singleton {
-        HazelcastCluster(instance(), Duration.ofSeconds(30)).apply { start() }
+    bind<HazelcastJetCluster>() with scoped(ProjectScope).singleton {
+        HazelcastJetCluster(instance(), Duration.ofSeconds(30)).apply { start() }
     }
 
     bind<HazelcastConfig>() with scoped(ProjectScope).multiton { name : String ->
-        val cluster : HazelcastCluster = instance()
-        HazelcastConfig(name, cluster.ips)
+        val cluster : HazelcastJetCluster = instance()
+        HazelcastConfig(name, cluster.ips, instance("hazelcast-group"))
     }
 
     bind<HazelcastDatastore>() with scoped(ProjectScope).multiton { name : String ->
@@ -117,6 +116,7 @@ val kodeinTest : Kodein = Kodein {
         }
     }
     constant("test-datastores") with listOf<String>("hazelcast")
+    constant("hazelcast-group") with "jet"
 }
 
 object TestScope : BaseScope<TestCase>()

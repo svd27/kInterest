@@ -8,6 +8,8 @@ import com.mongodb.reactivestreams.client.ClientSession
 import com.mongodb.reactivestreams.client.MongoClients
 import com.mongodb.reactivestreams.client.MongoCollection
 import com.mongodb.reactivestreams.client.MongoDatabase
+import info.kinterest.Query
+import info.kinterest.QueryResult
 import info.kinterest.datastore.DatastoreException
 import info.kinterest.datastore.DatastoreUnknownType
 import info.kinterest.datastore.EventManager
@@ -17,8 +19,10 @@ import info.kinterest.entity.*
 import info.kinterest.filter.*
 import info.kinterest.functional.Try
 import info.kinterest.functional.suspended
+import info.kinterest.projection.ParentProjectionResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -210,7 +214,7 @@ class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : Abstract
         Unit
     }
 
-    override suspend fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Iterable<E>> = Try.suspended(GlobalScope) {
+    override fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Flow<E>> = Try {
         val meta = f.meta
         log.debug { "$meta with ${meta.baseMeta}" }
         val coll = getCollection(meta)
@@ -219,7 +223,17 @@ class MongoDatastore(cfg: MongodatastoreConfig, events: EventManager) : Abstract
         coll.aggregate(pipeline).asFlow().map {
             @Suppress("UNCHECKED_CAST")
             meta.instance<ID>(this, it.get("_id") as ID) as E
-        }.toList(mutableListOf())
+        }
+    }
+
+    suspend fun <ID : Any, E : KIEntity<ID>> query(query: Query<ID, E>): Try<QueryResult<ID, E>> = Try.suspended {
+        val collection = getCollection(query.f.meta)
+        collection.toString()
+        if(query.projection.projections.isEmpty()) {
+            QueryResult(query, ParentProjectionResult(query.projection, mapOf()))
+        } else {
+            QueryResult(query, ParentProjectionResult(query.projection, mapOf()))
+        }
     }
 
     private inline suspend fun <R> tx(options: TransactionOptions = TransactionOptions.builder().build(), work: ClientSession.() -> Pair<R, suspend () -> Unit>): R =

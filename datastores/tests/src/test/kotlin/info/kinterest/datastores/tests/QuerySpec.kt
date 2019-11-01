@@ -1,24 +1,17 @@
 package info.kinterest.datastores.tests
 
+import info.kinterest.Query
 import info.kinterest.datastore.Datastore
 import info.kinterest.datastores.tests.jvm.EmployeeTransient
 import info.kinterest.datastores.tests.jvm.ManagerTransient
-import info.kinterest.datastores.tests.jvm.PersonJvm
-import info.kinterest.datastores.tests.jvm.PersonTransient
 import info.kinterest.filter.filter
-import info.kinterest.functional.getOrDefault
-import info.kinterest.functional.getOrElse
-import io.kotlintest.Spec
+import info.kinterest.projection.EntityProjection
+import info.kinterest.projection.ParentProjection
+import info.kinterest.projection.paging.Paging
 import io.kotlintest.forAll
-import io.kotlintest.matchers.asClue
-import io.kotlintest.matchers.boolean.shouldBeTrue
-import io.kotlintest.matchers.collections.shouldHaveSize
-import io.kotlintest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.provided.ProjectConfig
-import io.kotlintest.shouldBe
 import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import mu.KotlinLogging
 import org.kodein.di.Kodein
 import org.kodein.di.generic.M
 import org.kodein.di.generic.instance
@@ -26,76 +19,40 @@ import org.kodein.di.generic.on
 
 @ExperimentalCoroutinesApi
 class QuerySpec : FreeSpec({
-    val log = KotlinLogging.logger { }
     val kodein = Kodein {
         extend(kodeinTest)
     }
-    val spec: Spec = this
-
-    forAll(ProjectConfig.datastores) { which ->
-        "for type: $which" - {
-            "querying for a single entity" - {
-                val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}ds1"))
-                ds.register(PersonJvm)
-                val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
-                val pe = ds.create(pt).fold({ throw it }) { assert(it.size == 1); it.first() }
-                require(pe is Person)
-                pe.name.shouldBe("djuric")
-                val retrieved = ds.retrieve(pe._meta, pe.id).fold({ throw it }) { require(it.size == 1); it }.first()
-                retrieved.id.shouldBe(pe.id)
-                val filter = filter<Long, Person>(PersonJvm) {
-                    4 gte "age" or (10 lte "age")
+    val spec = this
+    forAll(ProjectConfig.datastores) {
+        which ->
+        "given a datastore $which" - {
+            val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}${which}ds1"))
+            "some entities" - {
+                val employees = List(100) {
+                    EmployeeTransient(it, "name$it", "first$it", it, if(it%2==0) 1L else 11L)
                 }
-                pe.name = "duric"
-                val queryRes = ds.query(filter)
-                queryRes.isSuccess.shouldBeTrue()
-                queryRes.getOrDefault { listOf() }.asClue {
-                    it.toList().shouldHaveSize(1)
-                    it.first().name.shouldBe("duric")
+                ds.create(employees)
+                val managers = List(100) {
+                    ManagerTransient("department $it","name$it", "first$it", it, if(it%2==0) 1L else 11L, it+1000)
                 }
-            }
-            "querying for entities in a hierarchy" - {
-                val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}ds2"))
-                ds.register(PersonJvm)
-                ds.register(info.kinterest.datastores.tests.jvm.EmployeeJvm)
-                ds.register(info.kinterest.datastores.tests.jvm.ManagerJvm)
-
-                val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
-
-                val ee = EmployeeTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000))
-                val me = ManagerTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000, "department" to null))
-                val crtRes = ds.create(pt, ee, me).fold({ throw it }) { it }
-                crtRes.shouldHaveSize(3)
-
-                val filter = filter<Long, Person>(PersonJvm) {
-                    4 gte "age" or (10 lte "age")
-                }
-                val qpers = ds.query(filter)
-                qpers.getOrElse { listOf() }.toList().asClue {
-                    it.shouldHaveSize(3)
-                }
-
-                val f = filter<Long, Employee>(info.kinterest.datastores.tests.jvm.EmployeeJvm) {
-                    4 gte "age" and (10001 gte "salary")
-                }
-                val qres = ds.query(f)
-                qres.getOrElse { log.debug(it) { "error on query" } }
-                qres.isSuccess.shouldBeTrue()
-                qres.getOrDefault { listOf() }.toList().shouldHaveSize(2)
-
-
-                val f1 = filter<Long, Manager>(info.kinterest.datastores.tests.jvm.ManagerJvm) {
-                    4 gte "age" and (10001 gte "salary")
-                }
-                val qres1 = ds.query(f1)
-                if(qres1.isFailure) {
-                    qres.fold({log.debug(it) { "error on query" }}) {Unit}
-                }
-                qres1.isSuccess.shouldBeTrue()
-
-                qres1.getOrDefault { listOf() }.toList().asClue {
-                    it.shouldHaveSize(1)
-                    it.first().shouldBeInstanceOf<Manager>()
+                "and a simple projection without sorting" - {
+                    var parent = ParentProjection<Long, Person>(mapOf())
+                    parent = parent + EntityProjection("entities", Paging(0, 5), null, parent)
+                    val f = filter<Long,Person>(info.kinterest.datastores.tests.jvm.PersonJvm) {
+                        50 lte "age"
+                    }
+                    val query = Query<Long,Person>(f, parent)
+                    /*
+                    val resTry = ds.query(query)
+                    resTry.isSuccess.shouldBeTrue()
+                    val res = resTry.getOrDefault { throw it }
+                    res.query.shouldBe(query)
+                    res.result.results.keys.shouldHaveSize(1)
+                    val projectionResult = res.result.results.values.first()
+                    require(projectionResult is EntityProjectionResult<*,*>)
+                    projectionResult.name.shouldBe("entities")
+                    projectionResult.page.entities.shouldHaveSize(5)
+                     */
                 }
             }
         }

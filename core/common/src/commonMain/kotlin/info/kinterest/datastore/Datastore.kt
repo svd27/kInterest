@@ -7,6 +7,7 @@ import info.kinterest.entity.KITransientEntity
 import info.kinterest.entity.PropertyMeta
 import info.kinterest.filter.FilterWrapper
 import info.kinterest.functional.Try
+import kotlinx.coroutines.flow.Flow
 
 
 interface Datastore {
@@ -23,7 +24,7 @@ interface Datastore {
     suspend fun getValues(type: KIEntityMeta, id:Any, props:Set<PropertyMeta>) : Try<Collection<Pair<PropertyMeta,Any?>>>
     suspend fun setValues(type: KIEntityMeta, id:Any, props:Map<PropertyMeta,Any?>) : Try<Unit>
 
-    suspend fun<ID:Any,E:KIEntity<ID>> query(f:FilterWrapper<ID,E>) : Try<Iterable<E>>
+    fun<ID:Any,E:KIEntity<ID>> query(f:FilterWrapper<ID,E>) : Try<Flow<E>>
 }
 
 object NOSTORE : Datastore {
@@ -42,5 +43,5 @@ object NOSTORE : Datastore {
     override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyMeta>): Try<Collection<Pair<PropertyMeta, Any?>>> = DONTDOTHIS()
     override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyMeta, Any?>): Try<Unit> = DONTDOTHIS()
 
-    override suspend fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Iterable<E>> = DONTDOTHIS()
+    override fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Flow<E>> = DONTDOTHIS()
 }

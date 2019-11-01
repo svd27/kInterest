@@ -35,7 +35,7 @@ val KClass<*>.asPropertyMeta : KClass<*>
   }
 
 class JvmGenerator : Generator() {
-    data class Hierarchy(val parent: DeclaredType?, val base: DeclaredType, val idType: TypeMirror) {
+    data class Hierarchy(val parent: DeclaredType?, val base: DeclaredType, val idType: TypeMirror, val path:List<Hierarchy>) {
         val parentAsType: TypeElement?
             get() = parent?.asElement() as? TypeElement
         val baseAsType: TypeElement
@@ -44,12 +44,17 @@ class JvmGenerator : Generator() {
 
     override fun generate(type: TypeElement, processingEnvironment: ProcessingEnvironment, roundEnvironment: RoundEnvironment): FileSpec? {
         fun note(msg: String) = processingEnvironment.note(msg)
-        val props = type.enclosedElements.filterIsInstance<ExecutableElement>().filter { it.simpleName.toString().run { startsWith("get") && length > 3 && it.parameters.isEmpty() } }.map { PropertyDescriptor(it, type) }
+        val props = extractProperties(type)
         props.forEach { note("$it") }
+
 
         fun findParentBaseAndIdType(type: DeclaredType): Hierarchy? = run {
             val tel = type.asElement() as TypeElement
-            val hierarchies = tel.interfaces.filterIsInstance<DeclaredType>().map { it to findParentBaseAndIdType(it) }.map { it.second?.copy(parent = it.first) }.filterNotNull()
+            val hierarchies = tel.interfaces.filterIsInstance<DeclaredType>()
+                    .map { it to findParentBaseAndIdType(it) }
+                    .map { val copy = it.second?.copy(parent = it.first)
+                        copy?.copy(path = copy.path+copy)
+                    }.filterNotNull()
             if (hierarchies.isEmpty()) {
                 tel.interfaces.filterIsInstance<DeclaredType>().map {
                     processingEnvironment.note("DeclaredType ${it}")
@@ -61,7 +66,7 @@ class JvmGenerator : Generator() {
                 }.map {
                     require(it.first.typeArguments.size == 1)
                     val idKlass = it.first.typeArguments[0]
-                    Hierarchy(null, type, idKlass)
+                    Hierarchy(null, type, idKlass, listOf())
                 }.firstOrNull()
             } else {
                 require(hierarchies.size == 1)
@@ -74,6 +79,11 @@ class JvmGenerator : Generator() {
             "hierarchy is null"
         }
         processingEnvironment.note("${type.simpleName}: hierarchy $hierarchy")
+
+        val allProperties = props + hierarchy.path
+                .flatMap { (it.parent?.asElement() as? TypeElement)?.let { extractProperties(it) }?: listOf() }
+
+        note("allProperties: $allProperties")
 
         val idKlass = hierarchy.idType.asKClass()
         val idGenerated = GuarantueedUnique::class !in type
@@ -182,12 +192,15 @@ class JvmGenerator : Generator() {
         base.addType(companion.build())
 
         val mutableMap = ClassName("kotlin.collections", "MutableMap")
-        val transient = createTransient(type, hierarchy, idKlass, mutableMap, props, targetName, targetClass)
+        val transient = createTransient(type, hierarchy, idKlass, mutableMap, props, targetName, targetClass, allProperties)
 
         return FileSpec.builder(targetPackage, targetName).addType(base.build()).addType(transient.build()).build()
     }
 
-    private fun createTransient(type: TypeElement, hierarchy: Hierarchy, idKlass: KClass<*>, mutableMap: ClassName, props: List<PropertyDescriptor>, targetName: String, targetClass: ClassName): TypeSpec.Builder {
+    private fun extractProperties(type: TypeElement) =
+            type.enclosedElements.filterIsInstance<ExecutableElement>().filter { it.simpleName.toString().run { startsWith("get") && length > 3 && it.parameters.isEmpty() } }.map { PropertyDescriptor(it, type) }
+
+    private fun createTransient(type: TypeElement, hierarchy: Hierarchy, idKlass: KClass<*>, mutableMap: ClassName, props: List<PropertyDescriptor>, targetName: String, targetClass: ClassName, allProperties:List<PropertyDescriptor>): TypeSpec.Builder {
         val transient = TypeSpec.classBuilder("${type.simpleName}Transient").addModifiers(KModifier.OPEN)
 
         if (hierarchy.parentAsType != null) {
@@ -209,7 +222,6 @@ class JvmGenerator : Generator() {
 
         transient.addSuperinterface(type.asClassName())
 
-
         props.forEach {
             transient.addProperty(PropertySpec.builder(it.name, it.type.asKClass().asTypeName().copy(it.nullable), KModifier.OVERRIDE).mutable(!it.readOnly).delegate("properties").build())
         }
@@ -217,11 +229,11 @@ class JvmGenerator : Generator() {
         transient.addProperty(PropertySpec.builder("_meta", KIEntityMeta::class, KModifier.OVERRIDE).initializer(targetName).build())
         val nostore = MemberName("info.kinterest.datastore", "NOSTORE")
         transient.addProperty(PropertySpec.builder("_store", Datastore::class, KModifier.OVERRIDE).initializer("%M", nostore).build())
-        val propsCode = "mutableMapOf<String, Any?>(${props.joinToString(",") { CodeBlock.builder().add("%S to entity.${it.name}", it.name).build().toString() }})"
+        val propsCode = "mutableMapOf<String, Any?>(${allProperties.joinToString(",") { CodeBlock.builder().add("%S to entity.${it.name}", it.name).build().toString() }})"
 
         transient.addFunction(FunSpec.constructorBuilder().addParameter("entity", targetClass).callThisConstructor(propsCode).build())
         fun createPropsPatameters(funSpec: FunSpec.Builder) {
-            props.forEach {
+            allProperties.forEach {
                 funSpec.addParameter(it.name, it.type.asKClass().asTypeName().copy(it.nullable))
             }
             funSpec.addParameter(ParameterSpec.builder("id", idKlass.asTypeName().copy(true)).defaultValue("null").build())
