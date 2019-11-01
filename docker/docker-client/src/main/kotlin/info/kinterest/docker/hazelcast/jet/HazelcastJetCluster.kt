@@ -44,12 +44,16 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
         }))
 
         val portStart = rnd.nextInt(32000, 40000)
+        val hostenv = System.getenv("DOCKER_CONTAINER_HOST")
+        val docker_ip = if (hostenv!=null && hostenv.isNotEmpty() ?: false)
+            hostenv
+        else "host.docker.internal"
         repeat(3) {
             val port = portStart + it
 
             conts += BaseContainer(client = client, image = "hazelcast/hazelcast-jet",
                     network = nw,
-                    env = listOf("JAVA_OPTS=-Dhazelcast.local.publicAddress=host.docker.internal:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster-jet.xml"),
+                    env = listOf("JAVA_OPTS=-Dhazelcast.local.publicAddress=$docker_ip:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster-jet.xml"),
                     binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster-jet.xml"))),
                     exposedPorts = ExposedPorts(ExposedPort(port)),
                     portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"), ExposedPort(5701)))) to (port)
