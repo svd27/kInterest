@@ -1,5 +1,6 @@
 package info.kinterest.generator
 
+import com.squareup.kotlinpoet.metadata.KotlinPoetMetadataPreview
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
 import info.kinterest.entity.KIEntityMeta
@@ -13,6 +14,7 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.companionObjectInstance
 import kotlin.reflect.full.memberProperties
 
+@KotlinPoetMetadataPreview
 class GeneratorSpek : Spek({
     describe("the generator") {
         describe("working on a simple entity") {
@@ -27,6 +29,8 @@ class GeneratorSpek : Spek({
               var name : String
               var age : Int
               val nValue : Long?
+              val neighbours : List<Test>
+              val friends : MutableList<Test>
             }
         """.trimIndent())
             it("works without an error") {

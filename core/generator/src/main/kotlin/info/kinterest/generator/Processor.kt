@@ -1,17 +1,17 @@
 package info.kinterest.generator
 
 import com.google.auto.service.AutoService
+import com.squareup.kotlinpoet.metadata.KotlinPoetMetadataPreview
 import info.kinterest.annotations.Entity
 import java.io.File
-import java.nio.file.Path
 import java.nio.file.Paths
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
-import javax.lang.model.element.AnnotationMirror
 import javax.lang.model.element.Element
 import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 
+@KotlinPoetMetadataPreview
 @AutoService(javax.annotation.processing.Processor::class)
 @SupportedAnnotationTypes("info.kinterest.annotations.Entity")
 @SupportedOptions(Processor.KAPT_KOTLIN_GENERATED_OPTION_NAME, "kapt.verbose", "targets")
@@ -19,6 +19,7 @@ import javax.tools.Diagnostic
 class Processor : AbstractProcessor() {
     companion object {
         const val KAPT_KOTLIN_GENERATED_OPTION_NAME = "kapt.kotlin.generated"
+        @KotlinPoetMetadataPreview
         val generators : MutableMap<String,Generator> = mutableMapOf("jvm" to JvmGenerator())
     }
 
