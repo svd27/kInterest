@@ -49,6 +49,7 @@ class BaseContainerTest {
     }
 
     @Test
+    @Disabled
     fun withPull() {
         client.listImagesCmd().withImageNameFilter("hello-world").exec().forEach {
             if(it.repoTags.any { it=="hello-world:latest" }) {
