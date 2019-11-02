@@ -11,6 +11,7 @@ import com.github.dockerjava.core.command.PullImageResultCallback
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import mu.KotlinLogging
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import java.util.concurrent.TimeUnit
@@ -30,6 +31,7 @@ class TestDockerClient {
     }
 
     @Test
+    @Disabled
     fun testListImages() {
         val info = client.infoCmd().exec()
         log.info { "docker info: $info" }
@@ -39,6 +41,7 @@ class TestDockerClient {
     }
 
     @Test
+    @Disabled
     fun testCreateNetwork() {
         val listResp = client.listNetworksCmd().withNameFilter("nw1").exec()
         log.info { listResp }
@@ -57,6 +60,7 @@ class TestDockerClient {
     }
 
     @Test
+    @Disabled
     fun runTest() {
         val searchImagesCmdResp = client.searchImagesCmd("hazelcast").exec()
         log.info {
