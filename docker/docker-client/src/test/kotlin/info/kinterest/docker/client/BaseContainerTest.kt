@@ -63,6 +63,7 @@ class BaseContainerTest {
     }
 
     @Test
+    @Disabled
     fun hazelcastClusterNoNw() {
         val container1 = BaseContainer(client, "hazelcast/hazelcast", env = listOf("JAVA_OPTS=-Dhazelcast.config=/opt/cluster/hazelcast-cluster.xml"),
                 binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml"))))
@@ -86,6 +87,7 @@ class BaseContainerTest {
     }
 
     @Test
+    @Disabled
     fun hazelcastNetworkNoCluster() {
         val suffix = Random(System.currentTimeMillis()).nextInt(55555)
         val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1$suffix").exec().id
@@ -125,6 +127,7 @@ class BaseContainerTest {
     }
 
     @Test
+    @Disabled
     fun hazelCastCpCluster() {
         val suffix = Random(System.currentTimeMillis()).nextInt(55555)
         val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1$suffix").exec().id.apply { networks = networks + this }
@@ -147,6 +150,7 @@ class BaseContainerTest {
     }
 
     @Test
+    @Disabled
     fun hazelcastNetworkTwoCluster() {
         val nw1 = client.createNetworkCmd().withDriver("bridge").withName("nw1").exec().id
         val nw2 = client.createNetworkCmd().withDriver("bridge").withName("nw2").exec().id
@@ -185,6 +189,7 @@ class BaseContainerTest {
     }
 
     @Test
+    @Disabled
     fun execTest() {
         val container1 = BaseContainer(client, "hazelcast/hazelcast")
         containers = containers + container1.container
