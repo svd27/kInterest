@@ -32,6 +32,7 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
 
     init {
         log.info { "docker ip: $docker_ip" }
+        log.info { this::class.java.classLoader.getResources("hazelcast/server/libs").toList().map { it.toURI() } }
         val rnd = Random(System.currentTimeMillis())
         val nwname = "hccpnw${rnd.nextInt(99999)}"
         val nw = client.createNetworkCmd().withDriver("bridge").withName(nwname).exec().id
@@ -54,10 +55,16 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
 
             conts += BaseContainer(client = client, image = "hazelcast/hazelcast-jet",
                     network = nw,
-                    env = listOf("JAVA_OPTS=-Dhazelcast.local.publicAddress=$docker_ip:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster-jet.xml"),
-                    binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster-jet.xml"))),
+                    //CLASSPATH_DEFAULT
+                    env = listOf(
+                            "JAVA_OPTS=-Dhazelcast.local.publicAddress=$docker_ip:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster-jet.xml",
+                            "CLASSPATH=/opt/hazelcast-libs/kotlin-stdlib-1.3.50.jar"
+                    ),
+                    binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster-jet.xml")),
+                            "/opt/hazelcast-libs" to listOf(javaClass.classLoader.getResource("kotlin-stdlib-1.3.50.jar"))),
                     exposedPorts = ExposedPorts(ExposedPort(port)),
                     portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"), ExposedPort(5701)))) to (port)
+
         }
 
         containers = conts.toMap()

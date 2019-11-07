@@ -5,10 +5,10 @@ import info.kinterest.EntitiesEvent
 import info.kinterest.datastore.Datastore
 import info.kinterest.datastore.DatastoreConfig
 import info.kinterest.datastore.EventManager
+import info.kinterest.datastore.IdGenerator
 import info.kinterest.entity.KIEntityMeta
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BroadcastChannel
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.sync.Mutex
 import mu.KLogger
 import mu.KotlinLogging
@@ -16,6 +16,7 @@ import org.kodein.di.Kodein
 import org.kodein.di.generic.bind
 import org.kodein.di.generic.instance
 import org.kodein.di.generic.singleton
+import java.util.*
 
 @ExperimentalCoroutinesApi
 val kodeinDatastores = Kodein.Module("dataStores") {
@@ -30,13 +31,16 @@ val kodeinDatastores = Kodein.Module("dataStores") {
     bind<DatastoreFactory>() with singleton { DatastoreFactory(instance()) }
 }
 
-interface IdGenerator<V:Any> {
-    fun next() : V
-}
 
 abstract class AbstractDatastore @ExperimentalCoroutinesApi constructor(cfg:DatastoreConfig, val events : EventManager) : Datastore {
     override val name: String = cfg.name
+    override val instanceId: Any = UUID.randomUUID()
+
     val idGenerators : MutableMap<KIEntityMeta, IdGenerator<*>> = mutableMapOf()
+
+    object UUIDGenerator : IdGenerator<UUID> {
+        override fun next(): UUID = UUID.randomUUID()
+    }
 
     @ExperimentalCoroutinesApi
     protected suspend fun ready() {

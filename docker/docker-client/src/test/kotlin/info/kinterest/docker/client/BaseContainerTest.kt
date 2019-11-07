@@ -3,7 +3,6 @@ package info.kinterest.docker.client
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.command.DockerCmdExecFactory
 import com.github.dockerjava.api.model.Frame
-import com.github.dockerjava.core.DefaultDockerClientConfig
 import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.core.command.ExecStartResultCallback
 import com.github.dockerjava.core.command.LogContainerResultCallback
@@ -11,21 +10,16 @@ import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import info.kinterest.functional.Try
 import info.kinterest.functional.getOrDefault
 import info.kinterest.functional.getOrElse
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.*
 import strikt.api.expectThat
 import strikt.assertions.isTrue
 import java.time.Duration
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Disabled
 class BaseContainerTest {
     val log = KotlinLogging.logger { }
     lateinit var client : DockerClient

@@ -15,6 +15,7 @@ dependencies {
     implementation("com.github.tschuchortdev:kotlin-compile-testing:1.2.3")
     implementation(project(":core:annotations"))
     implementation(project(":core:common"))
+    implementation(project(":core:jvm-backend", "default"))
     implementation("com.squareup:kotlinpoet:1.4.3")
     implementation("com.squareup:kotlinpoet-metadata:1.4.3")
     implementation("com.google.auto.service:auto-service:1.0-rc6")
@@ -24,6 +25,7 @@ dependencies {
     testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
     kapt("com.google.auto.service:auto-service:1.0-rc6")
+    testImplementation("io.kotlintest:kotlintest-runner-junit5:3.4.2")
     testImplementation(platform("io.strikt:strikt-bom:0.22.2"))
 
     // Versions can be omitted as they are supplied by the BOM

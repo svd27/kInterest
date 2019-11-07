@@ -1,9 +1,9 @@
 package info.kinterest.generator
 
 import com.google.auto.service.AutoService
+import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.metadata.KotlinPoetMetadataPreview
 import info.kinterest.annotations.Entity
-import java.io.File
 import java.nio.file.Paths
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -36,14 +36,10 @@ class Processor : AbstractProcessor() {
                 processingEnv.note("processing $source")
                 generators[target]?.let {
                     processingEnv.note("using generator $it")
-                    it.generate(source, processingEnv, roundEnv)?.let { f ->
+                    it.generate(source, processingEnv, roundEnv)?.let { f: FileSpec ->
                         f.writeTo(System.out)
-                        val pkDirs = f.packageName.split(".")
-                        val out = pkDirs.fold(Paths.get(outDir)) {
-                            acc, dir -> acc.resolve(dir)
-                        }
-                        processingEnv.note("Path: $out")
-                        f.writeTo(File(out.toFile(), f.name))
+                        processingEnv.note("Path: $outDir")
+                        f.writeTo(Paths.get(outDir))
                     }
                 }
             }

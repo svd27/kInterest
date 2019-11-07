@@ -18,6 +18,8 @@ import io.kotlintest.provided.ProjectConfig
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import mu.KotlinLogging
 import org.kodein.di.Kodein
 import org.kodein.di.generic.M
@@ -42,11 +44,11 @@ class EventsSpec : FreeSpec({
                     val pt = listOf(PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa")),
                             PersonTransient(mutableMapOf<String,Any?>("name" to "duric", "first" to "karin")))
 
-                    val ps = ds.create(pt).fold({ throw it }) { it }
+                    val ps = ds.create(pt).fold({ throw it }) { it }.toList(mutableListOf())
                     ps.shouldHaveSize(2)
 
                     val ids = ps.map { it.id }
-                    val retrieved = ds.retrieve(ps.first()._meta, ids).fold({ throw it }) { it }
+                    val retrieved = ds.retrieve(ps.first()._meta, ids).fold({ throw it }) { it }.toList(mutableListOf())
                     retrieved.shouldHaveSize(2)
                     val evt = channelListener.expect {
                         log.trace { "check $it" }
@@ -65,7 +67,7 @@ class EventsSpec : FreeSpec({
                 "given an enitity of type ${PersonJvm}" - {
                     val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa"))
 
-                    val pe = ds.create(pt).fold({ throw it }) { assert(it.size == 1); it.first() }
+                    val pe = ds.create(pt).fold({ throw it }) { it }.first()
                     require(pe is Person)
 
                     val ids = ds.delete(pe).fold({ throw it }) { it }
@@ -77,7 +79,7 @@ class EventsSpec : FreeSpec({
                         }
                     }
 
-                    val retrievedAgain = ds.retrieve(pe._meta, pe.id).fold({ throw it }) { it }
+                    val retrievedAgain = ds.retrieve(pe._meta, pe.id).fold({ throw it }) { it }.toList(mutableListOf())
                     "retrieving it again should not work" {
                         retrievedAgain.shouldBeEmpty()
                     }
@@ -94,12 +96,12 @@ class EventsSpec : FreeSpec({
                             PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa")),
                             PersonTransient(mutableMapOf<String,Any?>("name" to "duric", "first" to "karin")))
 
-                    val ps = ds.create(pt).fold({ throw it }) { it }
+                    val ps = ds.create(pt).fold({ throw it }) { it }.toList(mutableListOf())
 
                     ps.shouldHaveSize(2)
 
                     val ids = ps.map { it.id }
-                    val retrieved = ds.retrieve(ps.first()._meta, ids).fold({ throw it }) { it }
+                    val retrieved = ds.retrieve(ps.first()._meta, ids).fold({ throw it }) { it }.toList(mutableListOf())
                     retrieved.shouldHaveSize(2)
                     log.debug { "retrieved: $retrieved: ${retrieved.map { require(it is Person); it.first }}" }
                     retrieved.filterIsInstance<Person>().first { it.first == "sasa" }.apply { first = "sascha" }

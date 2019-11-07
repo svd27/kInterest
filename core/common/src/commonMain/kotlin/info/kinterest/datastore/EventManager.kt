@@ -5,8 +5,10 @@ import info.kinterest.entity.KIEntity
 import info.kinterest.entity.KIEntityMeta
 import info.kinterest.entity.PropertyMeta
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.BroadcastChannel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mu.KLogger
@@ -19,6 +21,7 @@ interface EventManager {
     val datastore: BroadcastChannel<DatastoreEvent>
     var entityChannels: Map<KIEntityMeta, BroadcastChannel<EntitiesEvent>>
     val mutex: Mutex
+    val scope get() = GlobalScope
 
     suspend fun dataStoreStarted(ds: Datastore) {
         datastore.send(DatastoreStarted(ds))
@@ -39,13 +42,15 @@ interface EventManager {
         }
     }
 
-    suspend fun <ID : Any, E : KIEntity<ID>> entitiesCreated(entities: Iterable<E>) = run {
+    fun <ID : Any, E : KIEntity<ID>> entitiesCreated(entities: Iterable<E>) = run {
         val first = entities.firstOrNull()
         if (first != null) {
             val meta = first._meta
 
-            log.info { "sending create $meta $entities" }
-            getEntityBroadcast(meta).send(EntitiesCreated(meta, entities.toList()))
+            scope.launch {
+                log.info { "sending create $meta $entities" }
+                getEntityBroadcast(meta).send(EntitiesCreated(meta, entities.toList()))
+            }
         }
     }
 

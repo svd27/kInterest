@@ -11,12 +11,13 @@ import io.kotlintest.TestCase
 import io.kotlintest.TestResult
 import io.kotlintest.extensions.TestListener
 import mu.KotlinLogging
+import kotlin.math.max
 
 object ProjectConfig : AbstractProjectConfig() {
-    val datastores : List<String> = listOf(MongodatastoreConfig.TYPE, HazelcastConfig.TYPE)
+    val datastores : List<String> = listOf(HazelcastConfig.TYPE, MongodatastoreConfig.TYPE)
     private val log = KotlinLogging.logger { }
 
-    override fun parallelism(): Int = 1
+    override fun parallelism(): Int = max(Runtime.getRuntime().availableProcessors() / 2, 1)
 
     init {
         log.info { "TMPDIR: ${System.getProperty("java.io.tmpdir")}" }

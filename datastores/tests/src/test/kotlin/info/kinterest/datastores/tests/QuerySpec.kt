@@ -23,17 +23,19 @@ class QuerySpec : FreeSpec({
         extend(kodeinTest)
     }
     val spec = this
+
+
     forAll(ProjectConfig.datastores) {
         which ->
-        "given a datastore $which" - {
+        "!given a datastore $which" - {
             val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}${which}ds1"))
             "some entities" - {
                 val employees = List(100) {
-                    EmployeeTransient(it, "name$it", "first$it", it, if(it%2==0) 1L else 11L)
+                    EmployeeTransient(salary = it, name = "name$it", first = "first$it", age = it, someLong = if(it%2==0) 1L else 11L)
                 }
                 ds.create(employees)
                 val managers = List(100) {
-                    ManagerTransient("department $it","name$it", "first$it", it, if(it%2==0) 1L else 11L, it+1000)
+                    ManagerTransient(department = "department $it", name = "name$it", first = "first$it", age = it, someLong = if(it%2==0) 1L else 11L, salary = it+1000)
                 }
                 "and a simple projection without sorting" - {
                     var parent = ParentProjection<Long, Person>(mapOf())
@@ -57,4 +59,8 @@ class QuerySpec : FreeSpec({
             }
         }
     }
-})
+}) {
+    init {
+
+    }
+}

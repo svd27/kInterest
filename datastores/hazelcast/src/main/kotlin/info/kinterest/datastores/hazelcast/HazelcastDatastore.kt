@@ -1,35 +1,50 @@
 package info.kinterest.datastores.hazelcast
 
+import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Klaxon
+import com.beust.klaxon.json
 import com.hazelcast.client.HazelcastClient
 import com.hazelcast.client.config.ClientConfig
 import com.hazelcast.client.config.ClientNetworkConfig
+import com.hazelcast.client.config.ClientUserCodeDeploymentConfig
 import com.hazelcast.config.GroupConfig
-import com.hazelcast.core.HazelcastJsonValue
-import com.hazelcast.core.IMap
+import com.hazelcast.core.*
 import com.hazelcast.query.Predicate
 import com.hazelcast.query.Predicates
 import info.kinterest.datastore.*
+import info.kinterest.datastore.IdGenerator
 import info.kinterest.datastores.AbstractDatastore
-import info.kinterest.datastores.IdGenerator
 import info.kinterest.entity.*
 import info.kinterest.filter.*
 import info.kinterest.functional.Try
+import info.kinterest.functional.getOrElse
 import info.kinterest.functional.suspended
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.ImplicitReflectionSerializer
+import kotlinx.serialization.UnstableDefault
+import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import java.io.StringReader
+import java.util.*
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
-class HazelcastConfig(name: String, config : Map<String,Any>) : DatastoreConfig(TYPE, name, config) {
-    constructor(name:String, addresses : List<String>, group: String) : this(name, mapOf("addresses" to addresses, "group" to group))
 
-    val addresses : List<String> by config
-    val group : String by config
+class HazelcastConfig(name: String, config: Map<String, Any>) : DatastoreConfig(TYPE, name, config) {
+    constructor(name: String, addresses: List<String>, group: String) : this(name, mapOf("addresses" to addresses, "group" to group))
+
+    val addresses: List<String> by config
+    val group: String by config
 
     companion object {
         const val TYPE = "hazelcast"
@@ -38,24 +53,51 @@ class HazelcastConfig(name: String, config : Map<String,Any>) : DatastoreConfig(
 
 
 @ExperimentalCoroutinesApi
-class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDatastore(cfg, events) {
-    val log = KotlinLogging.logger {  }
+class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractDatastore(cfg, events) {
+    private val log = KotlinLogging.logger { }
     override val name: String = cfg.name
 
-    val client = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply {
+    init {
+        log.debug { "stdlib: ${this::class.java.classLoader.getResources("kotlin-stdlib-1.3.50.jar").toList()}" }
+    }
+
+    val client: HazelcastInstance = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply {
         addresses = cfg.addresses
         //TODO: make this configurable
         setSmartRouting(false)
-    }).setGroupConfig(GroupConfig(cfg.group)))
-    val dbLock : Mutex = Mutex()
-    val collections = mutableMapOf<KIEntityMeta, IMap<Any,HazelcastJsonValue>>()
-    val metas : MutableMap<String,KIEntityMeta> = mutableMapOf()
+    }).setGroupConfig(GroupConfig(cfg.group)).setUserCodeDeploymentConfig(
+            ClientUserCodeDeploymentConfig()
+                    .addClass(RetrieveType::class.qualifiedName)
+                    .addClass(FieldsSetter::class.qualifiedName)
+                    .addClass(FieldsGetter::class.qualifiedName)
+                    .addClass(AddRelations::class.qualifiedName)
+                    .addClass(SetRelations::class.qualifiedName)
+                    .addClass(RemoveRelations::class.qualifiedName)
+                    .addClass(GetRelations::class.qualifiedName)
+                    .setEnabled(true)
+    ))
 
-    fun collection(meta: KIEntityMeta) : IMap<Any,HazelcastJsonValue> =
-            collections.getOrElse(meta.baseMeta) {throw DatastoreUnknownType(meta, this)}
+    private val dbLock: Mutex = Mutex()
+    private val collections = mutableMapOf<KIEntityMeta, IMap<Any, HazelcastJsonValue>>()
+    private val metas: MutableMap<String, KIEntityMeta> = mutableMapOf()
+
+    private fun collection(meta: KIEntityMeta): IMap<Any, HazelcastJsonValue> =
+            collections.getOrElse(meta.baseMeta) { throw DatastoreUnknownType(meta, this) }
 
     init {
         GlobalScope.launch { ready() }
+    }
+
+    override fun getIdGenerator(meta: KIEntityMeta): IdGenerator<*> = run {
+        val idType = meta.baseMeta.idType
+        when (idType) {
+            is LongPropertyMeta -> LongGenerator(meta.baseMeta.name)
+            is ReferenceProperty -> when (idType.type) {
+                UUID::class -> UUIDGenerator
+                else -> throw DatastoreException(this, "unsupported type for autogenerate $idType")
+            }
+            else -> throw DatastoreException(this, "unsupported type for autogenerate $idType")
+        }
     }
 
     inner class LongGenerator(name: String) : IdGenerator<Long> {
@@ -65,59 +107,97 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
     }
 
     override suspend fun register(meta: KIEntityMeta) {
-        val name = meta.baseMeta.type.qualifiedName
-        require(name!=null)
         dbLock.withLock {
             metas[meta.name] = meta
-            if(meta.idGenerated) {
-                when(meta.idType) {
-                    is LongPropertyMeta -> if(!idGenerators.containsKey(meta.baseMeta)) {
-                        idGenerators[meta.baseMeta] = LongGenerator(meta.baseMeta.type.qualifiedName!!)
+            if (meta.idGenerated) {
+                when (meta.idType) {
+                    is LongPropertyMeta -> if (!idGenerators.containsKey(meta.baseMeta)) {
+                        idGenerators[meta.baseMeta] = LongGenerator(meta.baseMeta.name)
                     }
                     else -> throw DatastoreException(this, "ids of type ${meta.idType} not supported")
                 }
             }
-            collections[meta.baseMeta] = client.getMap<Any,HazelcastJsonValue>("${this.name}name")
+            collections[meta.baseMeta] = client.getMap<Any, HazelcastJsonValue>("${this.name}name")
         }
     }
 
-    override suspend fun retrieve(type: KIEntityMeta, vararg ids: Any): Try<Collection<KIEntity<Any>>> = retrieve(type, ids.asIterable())
+    override fun <ID : Any, E : KIEntity<ID>> retrieve(type: KIEntityMeta, vararg ids: ID): Try<Flow<E>> = retrieve(type, ids.asIterable())
 
-    override suspend fun retrieve(type: KIEntityMeta, ids: Iterable<Any>): Try<Collection<KIEntity<Any>>> = Try.suspended(GlobalScope) {
-        val collection = collections.getOrElse(type) {throw DatastoreException(this)}
-        collection.getAll(ids.toSet()).map { deserialise<KIEntity<Any>,Any>(it.key, it.value) }
+    override fun <ID : Any, E : KIEntity<ID>> retrieve(type: KIEntityMeta, ids: Iterable<ID>): Try<Flow<E>> = Try {
+        val collection = collections.getOrElse(type) { throw DatastoreException(this) }
+        flow {
+            collection.executeOnKeys(ids.toSet(), RetrieveType()).map {
+                val meta = metas.getOrElse(it.value.toString()) {throw DatastoreException(this@HazelcastDatastore, "unknown type ${it.value}")}
+                @Suppress("UNCHECKED_CAST")
+                emit(meta.instance<ID>(this@HazelcastDatastore, it.key as ID) as E)
+            }
+        }
     }
 
-    override suspend fun <ID : Any, E : KITransientEntity<ID>> create(vararg entities: E): Try<Collection<KIEntity<ID>>> =create(entities.asIterable())
+
+    override fun <ID : Any, E : KITransientEntity<ID>, R : KIEntity<ID>> create(vararg entities: E): Try<Flow<R>> = create(entities.asIterable())
 
     private val klaxon = Klaxon()
 
-    override suspend fun <ID : Any, E : KITransientEntity<ID>> create(entities: Iterable<E>): Try<Collection<KIEntity<ID>>> = Try.suspended {
+    override fun <ID : Any, E : KITransientEntity<ID>, R : KIEntity<ID>> create(entities: Iterable<E>): Try<Flow<R>> = Try {
         val es = entities.toList()
-        if(es.isEmpty()) return@suspended listOf<KIEntity<ID>>()
-        val meta = es[0]._meta
-        val collection = collection(meta)
-        es.map {
-            val kiEntityMeta = it._meta
-            require(kiEntityMeta is KIEntityMetaJvm)
-            val metaInfo = kiEntityMeta.metaBlock
-            val types = metaInfo.types
-            val metaInfType = types.joinToString(separator = ",") { it.name }
-            val metaMap = mapOf(KIEntityMeta.TYPEKEY to metaInfo.type.name, KIEntityMeta.TYPESKEY to metaInfo.types.map { it.name }, KIEntityMeta.RELATIONSKEY to metaInfo.relations)
-            log.debug { "create meta: $kiEntityMeta\nmetainfo: $metaInfo\ntypes: $metaInfType" }
-            val id = if(kiEntityMeta.idGenerated) {
-                idGenerator(kiEntityMeta).next()
-            } else it._id!!
-            val properties = it.properties.filter { it.key != "id" } + (METAINFO to metaMap) + (METAINFO_TYPE to metaInfType)
-            log.debug { "create json: ${klaxon.toJsonString(properties)}" }
-            collection.put(id, HazelcastJsonValue(klaxon.toJsonString(
-                    //TODO: the filter should not be neccessary
-                    properties.filter { it.value!=null }
-            ).apply { log.trace { "creating json $this" } }))
-            @Suppress("UNCHECKED_CAST")
-            kiEntityMeta.instance<ID>(this, id as ID)
-        }.apply { events.entitiesCreated(this) }
+        if (es.isEmpty()) listOf<R>().asFlow() else {
+            val collection = collection(es[0]._meta)
+            es.map {
+                val kiEntityMeta = it._meta
+                require(kiEntityMeta is KIEntityMetaJvm)
+                val metaInfo: MetaInfo = kiEntityMeta.metaBlock
+                val types = metaInfo.types
+                val metaInfType = types.joinToString(separator = ",") { it.name }
+
+                log.debug { "create meta: $kiEntityMeta\nmetainfo: $metaInfo\ntypes: $metaInfType" }
+                val id = if (kiEntityMeta.idGenerated) {
+                    idGenerator(kiEntityMeta).next()
+                } else it._id!!
+                val props = it.properties.filter { it.key != "id" }.map {
+                    kiEntityMeta.properties.getOrElse(it.key) {
+                        throw IllegalStateException("failed to find property ${it.key} in $kiEntityMeta")
+                    } to it.value }
+                val properties = props.filter { it.first != kiEntityMeta.idType && it.first !is RelationProperty }
+                val rels = props.filter { it.first is RelationProperty }
+                @Suppress("UNCHECKED_CAST")
+                val outgoings = rels.filter { it.second != null }.map { (p, value) ->
+                    when (value) {
+                        is KIEntity<*> -> p to listOf(RelationTo(kiEntityMeta, p as RelationProperty, value._meta, value.id, value._store.name))
+                        is Collection<*> -> p to (value as Collection<KIEntity<*>>).map { v -> RelationTo(kiEntityMeta, p as RelationProperty, v._meta, v.id, v._store.name) }
+                        else -> null
+                    }
+
+                }.filterNotNull()
+                val json = json {
+                    val outgoingPairs = outgoings.map { (p, value) ->
+                        p.name to array(value.map {
+                            obj(
+                                    "relation" to it.relation,
+                                    "fromType" to it.fromType.name,
+                                    "toType" to it.toType.name,
+                                    "toId" to it.toId,
+                                    "toDatastore" to it.toDatastore
+                            )
+                        })
+                    }.asIterable()
+                    val obj = obj(properties.map { it.first.name to it.second })
+                    obj.set(METAINFO, obj(
+                            KIEntityMeta.TYPEKEY to metaInfo.type.name,
+                            KIEntityMeta.TYPESKEY to array(metaInfo.types.map { it.name }),
+                            KIEntityMeta.RELATIONSKEY to
+                                    obj(KIEntityMeta.OUTGOING to
+                                            obj(outgoingPairs)))
+                    )
+                    obj
+                }.apply { log.debug { "created json ${this.toJsonString(true, true)}" } }
+                collection.put(id, HazelcastJsonValue(json.toJsonString(canonical = true)))
+                @Suppress("UNCHECKED_CAST")
+                kiEntityMeta.instance<ID>(this, id as ID) as R
+            }.apply { events.entitiesCreated(this) }.asFlow()
+        }
     }
+
 
     private fun idGenerator(meta: KIEntityMeta) =
             idGenerators.getOrElse(meta.baseMeta) { throw DatastoreException(this) }
@@ -133,49 +213,155 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
         es.map { collection.remove(it.id); it.id }.toSet().apply { events.entitiesDeleted(meta, this) }
     }
 
+    @ImplicitReflectionSerializer
     override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyMeta>): Try<Collection<Pair<PropertyMeta, Any?>>> = Try.suspended(GlobalScope) {
         val collection = collection(type)
-        val entity = collection.get(id)?:throw DatastoreKeyNotFound(type, id, this)
-        val map = klaxon.parse<Map<String,Any?>>(entity.toString())?: mapOf()
-        log.debug {
-            "getValues json: ${map} ${map::class}"
-        }
-        props.map { it to map.get(it.name)}
+
+        val res = collection.submitToKey(id, FieldsGetter(props.map { it.name }.toSet())).await() as? String
+        log.debug { "submit returned: $res" }
+        val json = res?.let { klaxon.parseJsonObject(StringReader(it)) }?:throw DatastoreException(this, "hazelcast returned no result")
+        log.trace { "json ${json.toMap()}" }
+        log.trace { "FieldGetters returned $res" }
+        props.map { it to json.get(it.name) }
     }
 
+    @ImplicitReflectionSerializer
     override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyMeta, Any?>): Try<Unit> = Try.suspended(GlobalScope) {
         val collection = collection(type)
-        val json = collection.get(id)?:throw DatastoreKeyNotFound(type, id, this)
-        val entity = klaxon.parse<MutableMap<String,Any?>>(json.toString())!!
-        val upds = props.map { (property, value) ->
-            val old = entity[property.name]
-            entity[property.name] = value
-            property to (old to value)
+        val json = JsonObject().apply {
+            for ((prop, value) in props) {
+                set(prop.name, value)
+            }
         }
-        collection.put(id, HazelcastJsonValue(klaxon.toJsonString(entity)))
-        events.entityUpdated<Any, KIEntity<Any>>(type.instance(this, id), upds)
+        val submit: ICompletableFuture<Any> = collection.submitToKey(id, FieldsSetter(json.toJsonString()))
+
+        @Suppress("UNCHECKED_CAST")
+        val res1 = submit.await() as? String
+        val res: Map<String, Any?>? = res1?.let { klaxon.parse<Map<String, Any?>>(it) }
+        res?.entries?.fold(listOf<Pair<PropertyMeta, Pair<Any?, Any?>>>()) { acc, (name, value) ->
+            val propertyMeta = type.properties[name]!!
+            acc + (propertyMeta to (value to props[propertyMeta]))
+        }?.let { events.entityUpdated(type.instance(this, id), it) }
+
         Unit
+    }
+
+    override suspend fun <ID : Any, E : KIEntity<ID>> addRelations(type: KIEntityMeta, id: Any, prop: RelationProperty, entities: Collection<E>) {
+        val collection = collection(type)
+        val json = json {
+            array(
+            entities.map {
+                json {
+                    obj("toId" to it.id, "toType" to it._meta.name, "toDatastore" to it._store.name)
+                }
+            }
+            )
+        }
+        val exec = AddRelations(prop.name, json.toJsonString())
+        collection.submitToKey(id, exec).await()
+    }
+
+    override suspend fun <ID : Any, E : KIEntity<ID>> removeRelations(type: KIEntityMeta, id: Any, prop: RelationProperty, entities: Collection<E>) {
+        val collection = collection(type)
+        val json = json {
+            array(
+                    entities.map {
+                        json {
+                            obj("toId" to it.id, "toType" to it._meta.name, "toDatastore" to it._store.name)
+                        }
+                    }
+            )
+        }
+        val exec = RemoveRelations(prop.name, json.toJsonString())
+        collection.submitToKey(id, exec).await()
+    }
+
+    override suspend fun <ID : Any, E : KIEntity<ID>> setRelations(type: KIEntityMeta, id: Any, prop: RelationProperty, entities: Collection<E>) {
+        val collection = collection(type)
+        val json = json {
+            array(
+                    entities.map {
+                        json {
+                            obj("toId" to it.id, "toType" to it._meta.name, "toDatastore" to it._store.name)
+                        }
+                    }
+            )
+        }
+        val exec = SetRelations(prop.name, json.toJsonString())
+        collection.submitToKey(id, exec).await()
+    }
+
+    @UnstableDefault
+    @ImplicitReflectionSerializer
+    override fun <ID : Any, E : KIEntity<ID>> getRelations(type: KIEntityMeta, id: Any, prop: RelationProperty): Try<Flow<E>> = run {
+        val collection = collection(type)
+
+        val exec = GetRelations(prop.name)
+
+        flow {
+            val serialiser = prop.contained.idType.serializer()
+            val out = collection.submitToKey(id, exec).await() as? HazelcastJsonValue
+            val json = com.hazelcast.internal.json.Json.parse(out.toString()).asArray()
+
+            log.trace { "json array: ${json.toList()}" }
+            @Suppress("UNCHECKED_CAST")
+            val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID}.filterNotNull()
+            log.trace { "retrieve ${prop.contained} with ids $ids" }
+            retrieve<ID,E>(prop.contained, ids).getOrElse { throw it }.map {
+                log.trace { "getRelations emits $it" }
+                emit(it)
+            }
+        }
+
+        val serialiser = prop.contained.idType.serializer()
+        val out = runBlocking {collection.submitToKey(id, exec).await() as? HazelcastJsonValue}
+        val json = com.hazelcast.internal.json.Json.parse(out.toString()).asArray()
+
+        log.trace { "json array: ${json.toList()}" }
+        @Suppress("UNCHECKED_CAST")
+        val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID}.filterNotNull()
+        log.trace { "retrieve ${prop.contained} with ids $ids" }
+        retrieve<ID,E>(prop.contained, ids)
+    }
+
+
+
+    override suspend fun addIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override suspend fun setIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override suspend fun removeIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
     override fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Flow<E>> = Try {
         val collection = collection(f.meta)
-        val typePredicate = Predicates.ilike(METAINFO_TYPE, "%${f.meta.name}%")
+
+        val typePredicate = Predicates.equal("$METAINFO_TYPES[any]", f.meta.name)
         val predicate = Predicates.and(typePredicate, f.predicate)
         log.debug { "query ${collection.name} predicate: $predicate" }
         flow<E> {
-            collection.entrySet(predicate).forEach {
-                emit(deserialise(it.key, it.value))
-            }.apply { log.trace { "returning $this" } }
+            collection.executeOnEntries(RetrieveType(), predicate).forEach {
+                val meta = metas.getOrElse(it.value.toString()) {
+                    throw DatastoreException(this@HazelcastDatastore, "unknown meta ${it.value} where type of returned object is ${it.value::class}")
+                }
+                @Suppress("UNCHECKED_CAST")
+                emit(meta.instance<ID>(this@HazelcastDatastore, it.key) as E)
+            }
         }
     }
 
-    private fun <E : KIEntity<ID>, ID : Any> deserialise(id:Any, value : HazelcastJsonValue): E {
+    private fun <E : KIEntity<ID>, ID : Any> deserialise(id: Any, value: HazelcastJsonValue): E {
         val map = klaxon.parse<Map<String, Any?>>(value.toString())
         log.trace { "retrieved $map" }
         @Suppress("UNCHECKED_CAST")
         val metaEntry =
                 map?.getOrElse(METAINFO) { throw DatastoreException(this, "no ${METAINFO} found in $map") } as? Map<String, Any>
-                ?: throw DatastoreException(this, "$METAINFO is not a map")
+                        ?: throw DatastoreException(this, "$METAINFO is not a map")
         log.trace { "metaEntry $metaEntry" }
         val metaName = metaEntry.getOrElse(KIEntityMeta.TYPEKEY) { throw DatastoreException(this, "no ${KIEntityMeta.TYPEKEY} found in $metaEntry") }
         val meta = metas.getOrElse(metaName.toString()) { throw DatastoreException(this, "unknown meta $metaName") }
@@ -209,8 +395,42 @@ class HazelcastDatastore(cfg:HazelcastConfig, events:EventManager) : AbstractDat
             }
         }
 
+    suspend fun<V> ICompletableFuture<V>.await() : V = suspendCoroutine {
+       andThen(object : ExecutionCallback<V> {
+           override fun onFailure(t: Throwable?) {
+               it.resumeWithException(t?:IllegalStateException())
+           }
+
+           override fun onResponse(response: V) {
+               it.resume(response)
+           }
+       })
+    }
+            /*run {
+        val ch : Channel<V> = Channel()
+        val chEx : Channel<Throwable?> = Channel()
+        andThen(object : ExecutionCallback<V> {
+            override fun onFailure(t: Throwable?) {
+                GlobalScope.launch { chEx.send(t) }
+            }
+
+            override fun onResponse(response: V) {
+                GlobalScope.launch { ch.send(response) }
+            }
+        })
+        select<V> {
+            chEx.onReceive {
+                throw it?:IllegalStateException()
+            }
+            ch.onReceive {
+                it
+            }
+        }
+    }*/
+
     companion object {
-        const val METAINFO : String = "_metaInfo"
-        const val METAINFO_TYPE : String = "_metaInfo-type"
+        const val METAINFO: String = "_metaInfo"
+        const val METAINFO_TYPE: String = "${METAINFO}.type"
+        const val METAINFO_TYPES: String = "${METAINFO}.types"
     }
 }

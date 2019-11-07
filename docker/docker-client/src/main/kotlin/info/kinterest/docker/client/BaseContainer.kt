@@ -14,13 +14,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import mu.KotlinLogging
-import java.io.File
 import java.io.FileOutputStream
 import java.net.URL
 import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
-import kotlin.time.Duration
 
 sealed class LogAcceptor {
     abstract fun accept(s: String): Boolean
@@ -196,9 +193,15 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
         }) {
             tmp, file ->
             log.info { file.path }
-            val f = if(file.path.matches("/[A-Z]:/.*".toRegex())) Paths.get(file.path.substring(1)).fileName.toString() else
-                Paths.get(file.toURI()).fileName.toString()
-            file.openStream().copyTo(FileOutputStream(tmp.resolve(f).toFile()))
+
+            val f = file.file.split("/").last()
+            //val f = if(file.path.matches("/[A-Z]:/.*".toRegex())) Paths.get(file.path.substring(1)).fileName.toString() else
+              //  Paths.get(file.toURI()).fileName.toString()
+            log.debug { "url file: ${file.file} becomes $f" }
+            val fos = FileOutputStream(tmp.resolve(f).toFile())
+            file.openStream().copyTo(fos)
+            fos.flush()
+            fos.close()
             tmp
         }.toAbsolutePath().toString()
         Bind(dir, Volume(it.first)).apply { log.debug { this } }

@@ -9,7 +9,9 @@ import info.kinterest.docker.client.DockerClientConfigProvider
 import info.kinterest.docker.mongo.MongoCluster
 import info.kinterest.entity.KIEntityMeta
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BroadcastChannel
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.collect
@@ -20,6 +22,7 @@ import org.bson.Document
 import org.spekframework.spek2.Spek
 import org.spekframework.spek2.style.specification.describe
 
+@FlowPreview
 @ExperimentalCoroutinesApi
 class MongoEmbedTest: Spek({
     val cluster = MongoCluster(DockerClientConfigProvider.client())
@@ -68,7 +71,7 @@ class MongoEmbedTest: Spek({
             val oneTransient = OneTransient(mutableMapOf<String,Any?>("name" to "sasa"))
             val res = runBlocking { ds.create(oneTransient) }
             assert(res.isSuccess)
-            val entities = res.fold({throw it}) {it}
+            val entities = runBlocking { res.fold({throw it}) {it}.toList(mutableListOf()) }
             assert(entities.size==1)
             val e = entities.first()
             log.info { e.id }

@@ -1,9 +1,9 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import java.lang.Integer.max
 
 plugins {
     kotlin("jvm")
     kotlin("kapt")
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.3.50"
 }
 
 configurations.all {
@@ -12,11 +12,13 @@ configurations.all {
 
 val coroutinesVersion: String by project
 val striktVersion: String by project
+val kotlinSerializationVersion : String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation(project(":core:annotations"))
     implementation(project(":core:common"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime:$kotlinSerializationVersion")
     testImplementation(kotlin("test-junit5"))
     kaptTest(project(":core:generator", "default"))
     implementation(project(":datastores:mongo", "default"))
@@ -43,9 +45,9 @@ tasks.test {
     }
     systemProperty("io.netty.tryReflectionSetAccessible", false)
 
-    systemProperties["junit.jupiter.execution.parallel.enabled"] = true
-    maxParallelForks = max(Runtime.getRuntime().availableProcessors() / 2, 1)
-    setForkEvery(1)
+    //systemProperties["junit.jupiter.execution.parallel.enabled"] = true
+    //maxParallelForks = max(Runtime.getRuntime().availableProcessors() / 2, 1)
+    //setForkEvery(1)
 
     testLogging {
         events("failed", "skipped", "passed")

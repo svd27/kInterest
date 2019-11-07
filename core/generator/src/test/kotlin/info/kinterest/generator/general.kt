@@ -29,8 +29,9 @@ class GeneratorSpek : Spek({
               var name : String
               var age : Int
               val nValue : Long?
-              val neighbours : List<Test>
+              val neighbours : Set<Test>
               val friends : MutableList<Test>
+              val best : Test?
             }
         """.trimIndent())
             it("works without an error") {

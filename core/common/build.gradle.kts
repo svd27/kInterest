@@ -1,9 +1,11 @@
 plugins {
     kotlin("multiplatform") version "1.3.50"
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.3.50"
 }
 
 val coroutinesVersion: String by project
 val kodeinVersion: String by project
+val kotlinSerializationVersion : String by project
 
 kotlin {
     sourceSets {
@@ -12,6 +14,7 @@ kotlin {
                 implementation(kotlin("stdlib-common"))
                 implementation("io.github.microutils:kotlin-logging-common:1.7.6")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-common:$coroutinesVersion")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime-common:$kotlinSerializationVersion")
             }
         }
         val commonTest by getting {
@@ -28,7 +31,9 @@ kotlin {
         dependencies {
             implementation(kotlin("stdlib-jdk8"))
             implementation(kotlin("reflect"))
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime:$kotlinSerializationVersion")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:$coroutinesVersion")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$coroutinesVersion")
             implementation("org.kodein.di:kodein-di-generic-jvm:$kodeinVersion")
             implementation("org.kodein.di:kodein-di-conf-jvm:$kodeinVersion")
             implementation("io.github.microutils:kotlin-logging:1.7.6")
@@ -45,6 +50,7 @@ kotlin {
 
     js().compilations["main"].defaultSourceSet {
         dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$kotlinSerializationVersion")
             implementation(kotlin("stdlib-js"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:$coroutinesVersion")
             implementation("io.github.microutils:kotlin-logging-js:1.7.6")

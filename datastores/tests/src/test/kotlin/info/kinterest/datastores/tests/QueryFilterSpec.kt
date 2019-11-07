@@ -18,6 +18,7 @@ import io.kotlintest.provided.ProjectConfig
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.toList
 import mu.KotlinLogging
@@ -40,10 +41,10 @@ class QueryFilterSpec : FreeSpec({
                 val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}ds1"))
                 ds.register(PersonJvm)
                 val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
-                val pe = ds.create(pt).fold({ throw it }) { assert(it.size == 1); it.first() }
+                val pe = ds.create(pt).fold({ throw it }) { it }.first()
                 require(pe is Person)
                 pe.name.shouldBe("djuric")
-                val retrieved = ds.retrieve(pe._meta, pe.id).fold({ throw it }) { require(it.size == 1); it }.first()
+                val retrieved = ds.retrieve(pe._meta, pe.id).fold({ throw it }) { it }.first()
                 retrieved.id.shouldBe(pe.id)
                 val filter = filter<Long, Person>(PersonJvm) {
                     4 gte "age" or (10 lte "age")
@@ -68,7 +69,7 @@ class QueryFilterSpec : FreeSpec({
 
                 val ee = EmployeeTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000))
                 val me = ManagerTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L, "salary" to 10000, "department" to null))
-                val crtRes = ds.create(pt, ee, me).fold({ throw it }) { it }
+                val crtRes = ds.create(pt, ee, me).fold({ throw it }) { it }.toList(mutableListOf())
                 crtRes.shouldHaveSize(3)
 
                 val filter = filter<Long, Person>(PersonJvm) {
