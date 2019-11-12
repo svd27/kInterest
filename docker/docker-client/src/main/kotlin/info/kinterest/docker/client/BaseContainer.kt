@@ -194,7 +194,9 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
             tmp, file ->
             log.info { file.path }
 
-            val f = file.file.split("/").last()
+            val f = try { file.file.split("/").last() } catch (e:Exception) {
+                throw IllegalArgumentException("bad url $file with file: ${file.file}", e)
+            }
             //val f = if(file.path.matches("/[A-Z]:/.*".toRegex())) Paths.get(file.path.substring(1)).fileName.toString() else
               //  Paths.get(file.toURI()).fileName.toString()
             log.debug { "url file: ${file.file} becomes $f" }
