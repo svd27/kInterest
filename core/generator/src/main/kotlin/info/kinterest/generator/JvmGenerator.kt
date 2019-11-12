@@ -144,7 +144,7 @@ class JvmGenerator : Generator() {
         companion.addSuperinterface(KIEntityMetaJvm::class)
         companion.addProperty(
                 PropertySpec.builder("type", KClass::class.asClassName().parameterizedBy(STAR),
-                        KModifier.OVERRIDE).initializer("$targetClass::class").build()
+                        KModifier.OVERRIDE).initializer("%T::class", type.asClassName()).build()
         )
 
         companion.addProperty(

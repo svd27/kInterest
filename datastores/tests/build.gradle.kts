@@ -38,7 +38,9 @@ kapt {
     arguments { arg("targets", "jvm") }
 }
 
-
+tasks.build {
+    dependsOn(":datastores:hazelcast:jet:fatJar")
+}
 
 tasks.test {
     dependsOn(":datastores:hazelcast:jet:fatJar")
