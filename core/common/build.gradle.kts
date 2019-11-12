@@ -1,6 +1,8 @@
+@file:Suppress("UNUSED_VARIABLE")
+
 plugins {
-    kotlin("multiplatform") version "1.3.50"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.3.50"
+    kotlin("multiplatform")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 val coroutinesVersion: String by project

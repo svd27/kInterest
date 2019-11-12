@@ -3,12 +3,12 @@ package info.kinterest.datastores.hazelcast
 import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Klaxon
 import com.beust.klaxon.json
-import com.hazelcast.client.HazelcastClient
 import com.hazelcast.client.config.ClientConfig
 import com.hazelcast.client.config.ClientNetworkConfig
 import com.hazelcast.client.config.ClientUserCodeDeploymentConfig
 import com.hazelcast.config.GroupConfig
 import com.hazelcast.core.*
+import com.hazelcast.jet.Jet
 import com.hazelcast.query.Predicate
 import com.hazelcast.query.Predicates
 import info.kinterest.datastore.*
@@ -57,25 +57,28 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
     private val log = KotlinLogging.logger { }
     override val name: String = cfg.name
 
-    init {
-        log.debug { "stdlib: ${this::class.java.classLoader.getResources("kotlin-stdlib-1.3.50.jar").toList()}" }
+    val clientConfig = ClientConfig().apply {
+        setNetworkConfig(ClientNetworkConfig().apply {
+            addresses = cfg.addresses
+            //TODO: make this configurable
+            setSmartRouting(false)
+        })
+        setGroupConfig(GroupConfig(cfg.group))
+        setUserCodeDeploymentConfig(
+                ClientUserCodeDeploymentConfig()
+                        .addClass(RetrieveType::class.qualifiedName)
+                        .addClass(FieldsSetter::class.qualifiedName)
+                        .addClass(FieldsGetter::class.qualifiedName)
+                        .addClass(AddRelations::class.qualifiedName)
+                        .addClass(SetRelations::class.qualifiedName)
+                        .addClass(RemoveRelations::class.qualifiedName)
+                        .addClass(GetRelations::class.qualifiedName)
+                        .setEnabled(true)
+        )
     }
 
-    val client: HazelcastInstance = HazelcastClient.newHazelcastClient(ClientConfig().setNetworkConfig(ClientNetworkConfig().apply {
-        addresses = cfg.addresses
-        //TODO: make this configurable
-        setSmartRouting(false)
-    }).setGroupConfig(GroupConfig(cfg.group)).setUserCodeDeploymentConfig(
-            ClientUserCodeDeploymentConfig()
-                    .addClass(RetrieveType::class.qualifiedName)
-                    .addClass(FieldsSetter::class.qualifiedName)
-                    .addClass(FieldsGetter::class.qualifiedName)
-                    .addClass(AddRelations::class.qualifiedName)
-                    .addClass(SetRelations::class.qualifiedName)
-                    .addClass(RemoveRelations::class.qualifiedName)
-                    .addClass(GetRelations::class.qualifiedName)
-                    .setEnabled(true)
-    ))
+    val jet = Jet.newJetClient(clientConfig)
+    val client: HazelcastInstance = jet.hazelcastInstance
 
     private val dbLock: Mutex = Mutex()
     private val collections = mutableMapOf<KIEntityMeta, IMap<Any, HazelcastJsonValue>>()
@@ -117,7 +120,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
                     else -> throw DatastoreException(this, "ids of type ${meta.idType} not supported")
                 }
             }
-            collections[meta.baseMeta] = client.getMap<Any, HazelcastJsonValue>("${this.name}name")
+            collections[meta.baseMeta] = client.getMap<Any, HazelcastJsonValue>(meta.baseMeta.name)
         }
     }
 
@@ -127,7 +130,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         val collection = collections.getOrElse(type) { throw DatastoreException(this) }
         flow {
             collection.executeOnKeys(ids.toSet(), RetrieveType()).map {
-                val meta = metas.getOrElse(it.value.toString()) {throw DatastoreException(this@HazelcastDatastore, "unknown type ${it.value}")}
+                val meta = metas.getOrElse(it.value.toString()) { throw DatastoreException(this@HazelcastDatastore, "unknown type ${it.value}") }
                 @Suppress("UNCHECKED_CAST")
                 emit(meta.instance<ID>(this@HazelcastDatastore, it.key as ID) as E)
             }
@@ -157,7 +160,8 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
                 val props = it.properties.filter { it.key != "id" }.map {
                     kiEntityMeta.properties.getOrElse(it.key) {
                         throw IllegalStateException("failed to find property ${it.key} in $kiEntityMeta")
-                    } to it.value }
+                    } to it.value
+                }
                 val properties = props.filter { it.first != kiEntityMeta.idType && it.first !is RelationProperty }
                 val rels = props.filter { it.first is RelationProperty }
                 @Suppress("UNCHECKED_CAST")
@@ -219,7 +223,8 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
 
         val res = collection.submitToKey(id, FieldsGetter(props.map { it.name }.toSet())).await() as? String
         log.debug { "submit returned: $res" }
-        val json = res?.let { klaxon.parseJsonObject(StringReader(it)) }?:throw DatastoreException(this, "hazelcast returned no result")
+        val json = res?.let { klaxon.parseJsonObject(StringReader(it)) }
+                ?: throw DatastoreException(this, "hazelcast returned no result")
         log.trace { "json ${json.toMap()}" }
         log.trace { "FieldGetters returned $res" }
         props.map { it to json.get(it.name) }
@@ -250,11 +255,11 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         val collection = collection(type)
         val json = json {
             array(
-            entities.map {
-                json {
-                    obj("toId" to it.id, "toType" to it._meta.name, "toDatastore" to it._store.name)
-                }
-            }
+                    entities.map {
+                        json {
+                            obj("toId" to it.id, "toType" to it._meta.name, "toDatastore" to it._store.name)
+                        }
+                    }
             )
         }
         val exec = AddRelations(prop.name, json.toJsonString())
@@ -305,25 +310,24 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
 
             log.trace { "json array: ${json.toList()}" }
             @Suppress("UNCHECKED_CAST")
-            val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID}.filterNotNull()
+            val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID }.filterNotNull()
             log.trace { "retrieve ${prop.contained} with ids $ids" }
-            retrieve<ID,E>(prop.contained, ids).getOrElse { throw it }.map {
+            retrieve<ID, E>(prop.contained, ids).getOrElse { throw it }.map {
                 log.trace { "getRelations emits $it" }
                 emit(it)
             }
         }
 
         val serialiser = prop.contained.idType.serializer()
-        val out = runBlocking {collection.submitToKey(id, exec).await() as? HazelcastJsonValue}
+        val out = runBlocking { collection.submitToKey(id, exec).await() as? HazelcastJsonValue }
         val json = com.hazelcast.internal.json.Json.parse(out.toString()).asArray()
 
         log.trace { "json array: ${json.toList()}" }
         @Suppress("UNCHECKED_CAST")
-        val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID}.filterNotNull()
+        val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID }.filterNotNull()
         log.trace { "retrieve ${prop.contained} with ids $ids" }
-        retrieve<ID,E>(prop.contained, ids)
+        retrieve<ID, E>(prop.contained, ids)
     }
-
 
 
     override suspend fun addIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
@@ -355,25 +359,6 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         }
     }
 
-    private fun <E : KIEntity<ID>, ID : Any> deserialise(id: Any, value: HazelcastJsonValue): E {
-        val map = klaxon.parse<Map<String, Any?>>(value.toString())
-        log.trace { "retrieved $map" }
-        @Suppress("UNCHECKED_CAST")
-        val metaEntry =
-                map?.getOrElse(METAINFO) { throw DatastoreException(this, "no ${METAINFO} found in $map") } as? Map<String, Any>
-                        ?: throw DatastoreException(this, "$METAINFO is not a map")
-        log.trace { "metaEntry $metaEntry" }
-        val metaName = metaEntry.getOrElse(KIEntityMeta.TYPEKEY) { throw DatastoreException(this, "no ${KIEntityMeta.TYPEKEY} found in $metaEntry") }
-        val meta = metas.getOrElse(metaName.toString()) { throw DatastoreException(this, "unknown meta $metaName") }
-        log.trace { "$metaName returned $meta with name ${meta.name}" }
-
-        @Suppress("UNCHECKED_CAST")
-        return (@Suppress("UNCHECKED_CAST")
-        meta.instance<ID>(this, id) as E).apply {
-            log.trace { "returning $this" }
-        }
-    }
-
     @Suppress("UNCHECKED_CAST")
     val Filter<*, *>.predicate: Predicate<String, Any?>
         get() = run {
@@ -395,38 +380,17 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             }
         }
 
-    suspend fun<V> ICompletableFuture<V>.await() : V = suspendCoroutine {
-       andThen(object : ExecutionCallback<V> {
-           override fun onFailure(t: Throwable?) {
-               it.resumeWithException(t?:IllegalStateException())
-           }
-
-           override fun onResponse(response: V) {
-               it.resume(response)
-           }
-       })
-    }
-            /*run {
-        val ch : Channel<V> = Channel()
-        val chEx : Channel<Throwable?> = Channel()
+    private suspend fun <V> ICompletableFuture<V>.await(): V = suspendCoroutine {
         andThen(object : ExecutionCallback<V> {
             override fun onFailure(t: Throwable?) {
-                GlobalScope.launch { chEx.send(t) }
+                it.resumeWithException(t ?: IllegalStateException())
             }
 
             override fun onResponse(response: V) {
-                GlobalScope.launch { ch.send(response) }
+                it.resume(response)
             }
         })
-        select<V> {
-            chEx.onReceive {
-                throw it?:IllegalStateException()
-            }
-            ch.onReceive {
-                it
-            }
-        }
-    }*/
+    }
 
     companion object {
         const val METAINFO: String = "_metaInfo"

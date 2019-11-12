@@ -10,7 +10,7 @@
 rootProject.name = "kInterest"
 
 include("core", "core:annotations", "core:generator", "core:common", "core:jvm-backend")
-include("datastores", "datastores:mongo", "datastores:hazelcast", "datastores:tests")
+include("datastores", "datastores:mongo", "datastores:hazelcast", "datastores:hazelcast:jet", "datastores:tests")
 include("docker", "docker:docker-client", "docker:testcontainers")
 
 
@@ -30,6 +30,9 @@ pluginManagement {
                     useVersion(kotlinVersion)
                 }
                 "org.jetbrains.kotlin.js" -> {
+                    useVersion(kotlinVersion)
+                }
+                "org.jetbrains.kotlin.plugin.serialization" -> {
                     useVersion(kotlinVersion)
                 }
             }

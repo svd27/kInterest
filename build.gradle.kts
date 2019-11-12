@@ -9,6 +9,8 @@ repositories {
     jcenter()
 }
 
+version = "0.1.0"
+
 allprojects {
     group = "info.kinterest"
     repositories {

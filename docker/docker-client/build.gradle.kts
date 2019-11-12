@@ -46,6 +46,19 @@ dependencies {
     testImplementation("io.kotlintest:kotlintest-runner-junit5:$kotlinTestVersion")
 }
 
+tasks {
+    register("copyFat", Copy::class) {
+        dependsOn(":datastores:hazelcast:jet:fatJar")
+        val f = project(":datastores:hazelcast:jet").file("build/libs/jet-fat.jar")
+        from(f.absolutePath)
+        into("src/main/resources")
+    }
+
+    "build" {
+        dependsOn("copyFat")
+    }
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
     kotlinOptions.jvmTarget = "1.8"
 }

@@ -23,6 +23,7 @@ dependencies {
     kaptTest(project(":core:generator", "default"))
     implementation(project(":datastores:mongo", "default"))
     testImplementation(project(":datastores:hazelcast", "default"))
+    testImplementation(project(":datastores:hazelcast:jet", "default"))
     testImplementation(project(":docker:docker-client", "default"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
     testImplementation("io.kotlintest:kotlintest-runner-junit5:3.4.2")
@@ -40,6 +41,15 @@ kapt {
 
 
 tasks.test {
+    dependsOn(":datastores:hazelcast:jet:fatJar")
+    doFirst {
+        systemProperty("bla", "blubber")
+        systemProperty("info.kinterest.datastores.hazelcast.jet.jarlocation", project(":datastores:hazelcast:jet").file("build/libs/jet-fat.jar"))
+    }
+
+    systemProperty("bla", "blubber")
+    systemProperty("info.kinterest.datastores.hazelcast.jet.jarlocation", project(":datastores:hazelcast:jet").file("build/libs/jet-fat.jar"))
+
     if("windows" in System.getProperty("os.name").toLowerCase()) {
         environment("DOCKER_HOST", "tcp://127.0.0.1:2375")
     }

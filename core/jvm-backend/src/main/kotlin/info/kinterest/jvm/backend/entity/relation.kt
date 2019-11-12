@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
+import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 interface RelationCollection<ID:Any, out E: KIEntity<ID>> : Collection<E> {
@@ -88,17 +89,51 @@ class MutableRelationListDelegate<E>(e: KIEntity<Any>, prop:RelationProperty) {
     operator fun getValue(thisRef: Any?, property: KProperty<*>): MutableList<E> = list as MutableList<E>
 }
 
-class SingleRelationDelegate<E>(private val e: KIEntity<Any>, private val prop: SingleRelationProperty) {
+class SingleRelationNullablePropertyDelegate<E>(private val e: KIEntity<Any>, private val prop: SingleRelationProperty) : ReadWriteProperty<Any,E?> {
     private val log = KotlinLogging.logger { }
-    operator fun getValue(thisRef: Any?, property: KProperty<*>): E? = runBlocking {
+    override fun getValue(thisRef: Any, property: KProperty<*>): E? = runBlocking {
+        @Suppress("UNCHECKED_CAST")
         e._store.getRelations<Any, KIEntity<Any>>(e._meta, e.id, prop).getOrElse { throw it }.map {
             @Suppress("UNCHECKED_CAST")
             it as E
-        }.toList(mutableListOf()).firstOrNull().apply { log.debug { "${SingleRelationDelegate::class.qualifiedName} got $this" } }
+        }.toList(mutableListOf())
+                .firstOrNull()
+                .apply { log.debug { "${SingleRelationDelegate::class.qualifiedName} got $this" } }
     }
-    operator fun setValue(thisRef: Any?, property: KProperty<*>, v: E?) {
+
+    override fun setValue(thisRef: Any, property: KProperty<*>, value: E?) {
         check(thisRef is KIEntity<*>)
-        if(v==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf()) }
-        else runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf(v as KIEntity<Any>)) }
+        if(value==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf()) }
+        else runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf(value as KIEntity<Any>)) }
     }
+}
+
+class SingleRelationPropertyDelegate<E>(private val e: KIEntity<Any>, private val prop: SingleRelationProperty) : ReadWriteProperty<Any,E> {
+    private val log = KotlinLogging.logger { }
+    override fun getValue(thisRef: Any, property: KProperty<*>): E = runBlocking {
+        @Suppress("UNCHECKED_CAST")
+        e._store.getRelations<Any, KIEntity<Any>>(e._meta, e.id, prop).getOrElse { throw it }.map {
+            @Suppress("UNCHECKED_CAST")
+            it as E
+        }.toList(mutableListOf())
+                .first()
+                .apply { log.debug { "${SingleRelationDelegate::class.qualifiedName} got $this" } }
+    }
+
+    override fun setValue(thisRef: Any, property: KProperty<*>, value: E) {
+        check(thisRef is KIEntity<*>)
+        if(value==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf()) }
+        else runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf(value as KIEntity<Any>)) }
+    }
+}
+
+class SingleRelationDelegate<E>(private val e: KIEntity<Any>, private val prop: SingleRelationProperty) {
+
+    @Suppress("UNCHECKED_CAST")
+    operator fun provideDelegate(thisRef: Any, property: KProperty<*>) : ReadWriteProperty<Any, E> =
+            if(property.returnType.isMarkedNullable)
+                SingleRelationNullablePropertyDelegate<E>(e, prop) as ReadWriteProperty<Any, E>
+    else SingleRelationPropertyDelegate<E>(e, prop)
+
+
 }

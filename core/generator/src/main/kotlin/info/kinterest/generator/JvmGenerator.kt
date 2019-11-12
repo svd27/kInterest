@@ -343,10 +343,10 @@ class PropertyMetaDescriptor(val p: Property) {
                 else MutableRelationSetDelegate::class
             } else if ("List" in collectionClassName.simpleName) RelationListDelegate::class
             else RelationSetDelegate::class
-            propertySpec.delegate("%T(this, ${p.metaName})", delegate.asClassName().parameterizedBy(containedInCollection!!))
+            propertySpec.delegate("%T(this, ${p.metaName})", delegate.asClassName().parameterizedBy(containedInCollection!!).copy(nullable = p.nullable))
         } else {
             if(metaClass == SingleRelationProperty::class) {
-                propertySpec.delegate("%T(this, ${p.metaName})", SingleRelationDelegate::class.asClassName().parameterizedBy(p.className))
+                propertySpec.delegate("%T(this, ${p.metaName})", SingleRelationDelegate::class.asClassName().parameterizedBy(p.className.copy(nullable = p.nullable)))
             } else {
                 propertySpec.getter(FunSpec.getterBuilder().addStatement("return getValue<%T>(${p.metaName})", p.className).build())
                 if (p.mutable)

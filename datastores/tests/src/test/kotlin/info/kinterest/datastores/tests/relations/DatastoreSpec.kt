@@ -35,7 +35,7 @@ class DatastoreSpec : FreeSpec({
             val res = ds.create<Long, PersonTransient, Person>(listOf(pt1, pt2)).getOrElse { throwable -> throw throwable }.toList(mutableListOf())
             res.shouldHaveSize(2)
             res.map { it.name }.toSet().shouldContainExactly("olla")
-            res.filter { it.age == 44 }.first().spouse = res.filter { it.age == 47 }.first()
+            res.first { it.age == 44 }.marry(res.first { it.age == 47 })
             val f = filter<Long, Person>(PersonJvm) {
                 45 gte "age"
             }
@@ -44,6 +44,10 @@ class DatastoreSpec : FreeSpec({
             qr.shouldHaveSize(1)
             qr.first().spouse.shouldNotBeNull()
             log.debug { qr }
+        }
+        "just mucking about" - {
+            Populate.populate(ds)
+            1.shouldNotBeNull()
         }
     }
 })

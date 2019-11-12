@@ -1,6 +1,6 @@
 plugins {
     kotlin("jvm")
-    kotlin("kapt")
+    java
 }
 
 configurations.all {
@@ -14,10 +14,9 @@ val hazelcastJetVersion : String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
+    implementation(kotlin("reflect"))
     implementation(project(":core:annotations"))
     implementation(project(":core:common"))
-    implementation(project(":datastores:hazelcast:jet", "default"))
-    implementation("org.mongodb:mongodb-driver-reactivestreams:1.12.0")
     implementation("com.hazelcast:hazelcast-client:$hazelcastVersion")
     implementation("com.hazelcast.jet:hazelcast-jet:$hazelcastJetVersion")
     implementation(project(":datastores", "default"))
@@ -28,18 +27,29 @@ dependencies {
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
     testImplementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:2.2.0")
     testImplementation("com.hazelcast:hazelcast:$hazelcastVersion")
-    kaptTest(project(":core:generator", "default"))
 }
 
-kapt {
-    arguments { arg("targets", "jvm") }
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 
 
-tasks.test {
-    useJUnitPlatform() {
-        includeEngines ("spek2")
+val fatJar = task("fatJar", type = Jar::class) {
+    @Suppress("DEPRECATION")
+    baseName = "${project.name}-fat"
+    manifest {
+        attributes["Implementation-Title"] = "Jet Server code"
+        attributes["Implementation-Version"] = archiveVersion
+    }
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    with(tasks.jar.get() as CopySpec)
+}
+
+tasks {
+    "build" {
+        dependsOn(fatJar)
     }
 }
 

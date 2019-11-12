@@ -58,10 +58,10 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
                     //CLASSPATH_DEFAULT
                     env = listOf(
                             "JAVA_OPTS=-Dhazelcast.local.publicAddress=$docker_ip:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster-jet.xml",
-                            "CLASSPATH=/opt/hazelcast-libs/kotlin-stdlib-1.3.50.jar"
+                            "CLASSPATH=/opt/hazelcast-libs/jet-fat.jar"
                     ),
                     binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster-jet.xml")),
-                            "/opt/hazelcast-libs" to listOf(javaClass.classLoader.getResource("kotlin-stdlib-1.3.50.jar"))),
+                            "/opt/hazelcast-libs" to listOf(javaClass.classLoader.getResource("jet-fat.jar"))),
                     exposedPorts = ExposedPorts(ExposedPort(port)),
                     portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"), ExposedPort(5701)))) to (port)
 
