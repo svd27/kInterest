@@ -42,13 +42,6 @@ kapt {
 
 tasks.test {
     dependsOn(":datastores:hazelcast:jet:fatJar")
-    doFirst {
-        systemProperty("bla", "blubber")
-        systemProperty("info.kinterest.datastores.hazelcast.jet.jarlocation", project(":datastores:hazelcast:jet").file("build/libs/jet-fat.jar"))
-    }
-
-    systemProperty("bla", "blubber")
-    systemProperty("info.kinterest.datastores.hazelcast.jet.jarlocation", project(":datastores:hazelcast:jet").file("build/libs/jet-fat.jar"))
 
     if("windows" in System.getProperty("os.name").toLowerCase()) {
         environment("DOCKER_HOST", "tcp://127.0.0.1:2375")

@@ -45,7 +45,7 @@ class DatastoreSpec : FreeSpec({
             qr.first().spouse.shouldNotBeNull()
             log.debug { qr }
         }
-        "just mucking about" - {
+        "just mucking about $which" - {
             Populate.populate(ds)
             1.shouldNotBeNull()
         }

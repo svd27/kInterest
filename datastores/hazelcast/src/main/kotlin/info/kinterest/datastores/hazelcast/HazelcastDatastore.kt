@@ -65,15 +65,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         })
         setGroupConfig(GroupConfig(cfg.group))
         setUserCodeDeploymentConfig(
-                ClientUserCodeDeploymentConfig()
-                        .addClass(RetrieveType::class.qualifiedName)
-                        .addClass(FieldsSetter::class.qualifiedName)
-                        .addClass(FieldsGetter::class.qualifiedName)
-                        .addClass(AddRelations::class.qualifiedName)
-                        .addClass(SetRelations::class.qualifiedName)
-                        .addClass(RemoveRelations::class.qualifiedName)
-                        .addClass(GetRelations::class.qualifiedName)
-                        .setEnabled(true)
+                ClientUserCodeDeploymentConfig().setEnabled(true)
         )
     }
 
