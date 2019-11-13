@@ -57,6 +57,10 @@ tasks {
     "build" {
         dependsOn("copyFat")
     }
+
+    assemble {
+        dependsOn("copyFat")
+    }
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
