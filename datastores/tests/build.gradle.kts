@@ -3,7 +3,7 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 plugins {
     kotlin("jvm")
     kotlin("kapt")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.3.50"
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 configurations.all {
@@ -43,7 +43,7 @@ tasks.build {
 }
 
 tasks.test {
-    dependsOn(":datastores:hazelcast:jet:fatJar")
+    dependsOn(":docker:docker-client:copyFat")
 
     if("windows" in System.getProperty("os.name").toLowerCase()) {
         environment("DOCKER_HOST", "tcp://127.0.0.1:2375")

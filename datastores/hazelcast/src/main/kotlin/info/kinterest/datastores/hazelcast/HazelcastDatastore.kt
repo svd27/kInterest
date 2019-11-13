@@ -323,15 +323,51 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
 
 
     override suspend fun addIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        if(relations.isEmpty()) return
+        val collection = collection(relations.first().relation.contained)
+        val json = json {
+            array(
+                    relations.map {
+                        json {
+                            obj("toId" to it.fromId, "toType" to it.fromType.name, "toDatastore" to it.fromDatastore)
+                        }
+                    }
+            )
+        }
+        val exec = AddIncomingRelations(relations.first().relation.name, json.toJsonString())
+        collection.submitToKey(id, exec).await()
     }
 
     override suspend fun setIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        if(relations.isEmpty()) return
+        val collection = collection(relations.first().relation.contained)
+        val json = json {
+            array(
+                    relations.map {
+                        json {
+                            obj("toId" to it.fromId, "toType" to it.fromType.name, "toDatastore" to it.fromDatastore)
+                        }
+                    }
+            )
+        }
+        val exec = SetIncomingRelations(relations.first().relation.name, json.toJsonString())
+        collection.submitToKey(id, exec).await()
     }
 
     override suspend fun removeIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        if(relations.isEmpty()) return
+        val collection = collection(relations.first().relation.contained)
+        val json = json {
+            array(
+                    relations.map {
+                        json {
+                            obj("toId" to it.fromId, "toType" to it.fromType.name, "toDatastore" to it.fromDatastore)
+                        }
+                    }
+            )
+        }
+        val exec = RemoveRelations(relations.first().relation.name, json.toJsonString())
+        collection.submitToKey(id, exec).await()
     }
 
     override fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Flow<E>> = Try {

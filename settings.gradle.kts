@@ -11,7 +11,7 @@ rootProject.name = "kInterest"
 
 include("core", "core:annotations", "core:generator", "core:common", "core:jvm-backend")
 include("datastores", "datastores:mongo", "datastores:hazelcast", "datastores:hazelcast:jet", "datastores:tests")
-include("docker", "docker:docker-client", "docker:testcontainers")
+include("docker:docker-client")
 
 
 val kotlinVersion: String by settings
