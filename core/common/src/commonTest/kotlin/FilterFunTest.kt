@@ -28,6 +28,10 @@ class FilterFunTest {
             TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
         }
 
+        override fun <ID : Any, E : KIEntity<ID>> getRelations(property: RelationProperty): Collection<E> {
+            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        }
+
         override fun equals(other: Any?): Boolean = _equals(other)
         override fun hashCode(): Int = _hashCode()
 

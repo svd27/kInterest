@@ -2,7 +2,10 @@ package info.kinterest.jvm.backend.entity
 
 import info.kinterest.entity.KIEntity
 import info.kinterest.entity.PropertyMeta
+import info.kinterest.entity.RelationProperty
 import info.kinterest.functional.Try
+import info.kinterest.functional.getOrElse
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 
 interface KIEntityJvm<ID:Any> : KIEntity<ID> {
@@ -19,6 +22,8 @@ interface KIEntityJvm<ID:Any> : KIEntity<ID> {
     override fun<V> setValue(property: PropertyMeta, v:V?) = runBlocking {
         _store.setValues(_meta, id, mapOf(property to v)).fold({throw it}) {Unit}
     }
+
+    override fun <ID:Any, E:KIEntity<ID>> getRelations(property: RelationProperty): Collection<E> = runBlocking { _store.getRelations<Any, E>(_meta, id, property).getOrElse { throw it }.toList(mutableListOf()) }
 }
 
 

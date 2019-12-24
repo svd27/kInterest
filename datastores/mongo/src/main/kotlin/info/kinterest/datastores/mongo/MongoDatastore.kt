@@ -426,5 +426,6 @@ val Filter<*, *>.bson: Document
                 is GTFilter<*, *, *> -> Document(prop.name, Document("\$gt", value))
                 is LTFilter<*, *, *> -> Document(prop.name, Document("\$lt", value))
             }
+            is RelationFilter<*,*,*,*> -> DONTDOTHIS()
         }
     }

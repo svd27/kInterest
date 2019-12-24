@@ -11,6 +11,7 @@ import com.hazelcast.core.*
 import com.hazelcast.jet.Jet
 import com.hazelcast.query.Predicate
 import com.hazelcast.query.Predicates
+import info.kinterest.DONTDOTHIS
 import info.kinterest.datastore.*
 import info.kinterest.datastore.IdGenerator
 import info.kinterest.datastores.AbstractDatastore
@@ -404,6 +405,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
                             Predicates.greaterThan(prop.name, value) as Predicate<String, Any?>
                         is LTFilter<*, *, *> -> Predicates.lessThan(prop.name, value) as Predicate<String, Any?>
                     }
+                    is RelationFilter<*,*,*,*> -> DONTDOTHIS()
                 }
             }
         }

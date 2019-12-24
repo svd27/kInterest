@@ -10,6 +10,7 @@ interface KIEntity<out ID:Any> {
 
     fun<V> getValue(property: PropertyMeta) : V?
     fun<V> setValue(property: PropertyMeta, v:V?)
+    fun<ID:Any, E:KIEntity<ID>> getRelations(property: RelationProperty) : Collection<E>
     fun asTransient() : KITransientEntity<ID>
 
     fun _equals(o:Any?) : Boolean = o is KIEntity<*> && o._meta == _meta && o.id==id
