@@ -24,5 +24,7 @@ kotlin {
             implementation(kotlin("stdlib-jdk8"))
         }
     }
-    js()
+    js {
+        browser()
+    }
 }

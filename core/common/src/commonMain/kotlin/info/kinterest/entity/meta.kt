@@ -2,9 +2,9 @@ package info.kinterest.entity
 
 import info.kinterest.DONTDOTHIS
 import info.kinterest.datastore.Datastore
-import kotlinx.serialization.ImplicitReflectionSerializer
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.internal.nullable
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 
@@ -41,8 +41,8 @@ data class MetaInfo(val type: KIEntityMeta, val types:List<KIEntityMeta>, val ou
 }
 
 sealed class PropertyMeta(val name : String, val type : KClass<*>, val nullable : Boolean, val readOnly : Boolean) {
+    @InternalSerializationApi
     @Suppress("UNCHECKED_CAST")
-    @ImplicitReflectionSerializer
     open fun serializer() : KSerializer<Any> = (if(nullable) type.serializer().nullable else type.serializer()) as KSerializer<Any>
 
     override fun equals(other: Any?): Boolean = other is PropertyMeta && other.name == name && other.type == type
@@ -67,7 +67,7 @@ sealed class DateOrTimeProperty(name : String, type : KClass<*>, nullable : Bool
 class LocalDateProperty()
 
 class ReferenceProperty(name: String, type: KClass<*>, nullable : Boolean, readOnly : Boolean) : PropertyMeta(name, type, nullable, readOnly) {
-    @ImplicitReflectionSerializer
+    @InternalSerializationApi
     override fun serializer(): KSerializer<Any> = DONTDOTHIS("not supported yet")
 }
 

@@ -8,37 +8,35 @@ import info.kinterest.datastores.tests.jvm.PersonTransient
 import info.kinterest.filter.filter
 import info.kinterest.functional.getOrDefault
 import info.kinterest.functional.getOrElse
-import io.kotlintest.Spec
-import io.kotlintest.forAll
-import io.kotlintest.matchers.asClue
-import io.kotlintest.matchers.boolean.shouldBeTrue
-import io.kotlintest.matchers.collections.shouldHaveSize
-import io.kotlintest.matchers.types.shouldBeInstanceOf
+import io.kotest.assertions.asClue
+import io.kotest.core.spec.Spec
+import io.kotest.core.spec.style.FreeSpec
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.provided.ProjectConfig
-import io.kotlintest.shouldBe
-import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.toList
 import mu.KotlinLogging
-import org.kodein.di.Kodein
-import org.kodein.di.generic.M
-import org.kodein.di.generic.instance
-import org.kodein.di.generic.on
+import org.kodein.di.DI
+import org.kodein.di.instance
+import org.kodein.di.on
 
 @ExperimentalCoroutinesApi
 class QueryFilterSpec : FreeSpec({
     val log = KotlinLogging.logger { }
-    val kodein = Kodein {
+    val kodein = DI {
         extend(kodeinTest)
     }
     val spec: Spec = this
 
-    forAll(ProjectConfig.datastores) { which ->
+    ProjectConfig.datastores.forEach { which ->
         "for type: $which" - {
             "querying for a single entity" - {
-                val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}ds1"))
+                val ds: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "${spec::class.simpleName}ds1"))
                 ds.register(PersonJvm)
                 val pt = PersonTransient(mutableMapOf<String,Any?>("name" to "djuric", "first" to "sasa", "age" to 3, "someLong" to 10L))
                 val pe = ds.create(pt).fold({ throw it }) { it }.first()
@@ -60,7 +58,7 @@ class QueryFilterSpec : FreeSpec({
                 }
             }
             "querying for entities in a hierarchy" - {
-                val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}ds2"))
+                val ds: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "${spec::class.simpleName}ds2"))
                 ds.register(PersonJvm)
                 ds.register(info.kinterest.datastores.tests.jvm.EmployeeJvm)
                 ds.register(info.kinterest.datastores.tests.jvm.ManagerJvm)

@@ -12,14 +12,14 @@ import kotlinx.coroutines.channels.BroadcastChannel
 import kotlinx.coroutines.sync.Mutex
 import mu.KLogger
 import mu.KotlinLogging
-import org.kodein.di.Kodein
-import org.kodein.di.generic.bind
-import org.kodein.di.generic.instance
-import org.kodein.di.generic.singleton
+import org.kodein.di.DI
+import org.kodein.di.bind
+import org.kodein.di.instance
+import org.kodein.di.singleton
 import java.util.*
 
 @ExperimentalCoroutinesApi
-val kodeinDatastores = Kodein.Module("dataStores") {
+val kodeinDatastores = DI.Module("dataStores") {
     bind<EventManager>() with singleton {
         object : EventManager {
             override val log: KLogger = KotlinLogging.logger(EventManager::class.qualifiedName!!)

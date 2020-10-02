@@ -36,6 +36,8 @@ interface KITransientEntity<out ID:Any> : KIEntity<ID> {
         properties[property.name] = v
     }
 
+    override fun <ID : Any, E : KIEntity<ID>> getRelations(property: RelationProperty): Collection<E> = emptyList()
+
     override fun _equals(o:Any?) : Boolean = o is KIEntity<*> && o._meta == _meta && o.id==id
     override fun _toString() : String = """${this::class.simpleName}($properties)"""
 }

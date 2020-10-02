@@ -1,6 +1,6 @@
 package io.kotlintest.provided
 
-import io.kotlintest.AbstractProjectConfig
+import io.kotest.core.config.AbstractProjectConfig
 
 object ProjectConfig : AbstractProjectConfig() {
     init {

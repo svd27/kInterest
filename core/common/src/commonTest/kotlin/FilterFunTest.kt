@@ -49,10 +49,10 @@ class FilterFunTest {
             override val baseMeta: KIEntityMeta
                 get() = this
             override val properties: Map<String, PropertyMeta>
-                get() = TODO("not implemented") //To change initializer of created properties use File | Settings | File Templates.
+                get() = mapOf("age" to LongPropertyMeta("age", false, false))
 
             override fun <ID : Any> instance(_store: Datastore, id: Any): KIEntity<ID> {
-                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                return AEntity(id as Long, null, 0) as KIEntity<ID>
             }
         }
     }

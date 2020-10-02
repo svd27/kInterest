@@ -6,14 +6,14 @@ import com.beust.klaxon.json
 import com.hazelcast.client.config.ClientConfig
 import com.hazelcast.client.config.ClientNetworkConfig
 import com.hazelcast.client.config.ClientUserCodeDeploymentConfig
-import com.hazelcast.config.GroupConfig
-import com.hazelcast.core.*
+import com.hazelcast.core.HazelcastInstance
+import com.hazelcast.core.HazelcastJsonValue
 import com.hazelcast.jet.Jet
+import com.hazelcast.map.IMap
 import com.hazelcast.query.Predicate
-import com.hazelcast.query.Predicates
+import com.hazelcast.query.Predicates.*
 import info.kinterest.DONTDOTHIS
 import info.kinterest.datastore.*
-import info.kinterest.datastore.IdGenerator
 import info.kinterest.datastores.AbstractDatastore
 import info.kinterest.entity.*
 import info.kinterest.filter.*
@@ -26,19 +26,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.ImplicitReflectionSerializer
-import kotlinx.serialization.UnstableDefault
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.StringReader
 import java.util.*
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
 
 
 class HazelcastConfig(name: String, config: Map<String, Any>) : DatastoreConfig(TYPE, name, config) {
@@ -64,7 +61,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             //TODO: make this configurable
             setSmartRouting(false)
         })
-        setGroupConfig(GroupConfig(cfg.group))
+        setClusterName(cfg.group)
         setUserCodeDeploymentConfig(
                 ClientUserCodeDeploymentConfig().setEnabled(true)
         )
@@ -210,20 +207,17 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         es.map { collection.remove(it.id); it.id }.toSet().apply { events.entitiesDeleted(meta, this) }
     }
 
-    @ImplicitReflectionSerializer
     override suspend fun getValues(type: KIEntityMeta, id: Any, props: Set<PropertyMeta>): Try<Collection<Pair<PropertyMeta, Any?>>> = Try.suspended(GlobalScope) {
         val collection = collection(type)
 
-        val res = collection.submitToKey(id, FieldsGetter(props.map { it.name }.toSet())).await() as? String
+        val res : String = collection.submitToKey(id, FieldsGetter(props.map { it.name }.toSet())).await()
         log.debug { "submit returned: $res" }
-        val json = res?.let { klaxon.parseJsonObject(StringReader(it)) }
-                ?: throw DatastoreException(this, "hazelcast returned no result")
+        val json = klaxon.parseJsonObject(StringReader(res))
         log.trace { "json ${json.toMap()}" }
         log.trace { "FieldGetters returned $res" }
-        props.map { it to json.get(it.name) }
+        props.map { it to json[it.name] }
     }
 
-    @ImplicitReflectionSerializer
     override suspend fun setValues(type: KIEntityMeta, id: Any, props: Map<PropertyMeta, Any?>): Try<Unit> = Try.suspended(GlobalScope) {
         val collection = collection(type)
         val json = JsonObject().apply {
@@ -231,11 +225,10 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
                 set(prop.name, value)
             }
         }
-        val submit: ICompletableFuture<Any> = collection.submitToKey(id, FieldsSetter(json.toJsonString()))
+        val submit = collection.submitToKey(id, FieldsSetter(json.toJsonString()))
 
-        @Suppress("UNCHECKED_CAST")
-        val res1 = submit.await() as? String
-        val res: Map<String, Any?>? = res1?.let { klaxon.parse<Map<String, Any?>>(it) }
+        val jsonResult : String = submit.await()
+        val res: Map<String, Any?>? = klaxon.parse<Map<String, Any?>>(jsonResult)
         res?.entries?.fold(listOf<Pair<PropertyMeta, Pair<Any?, Any?>>>()) { acc, (name, value) ->
             val propertyMeta = type.properties[name]!!
             acc + (propertyMeta to (value to props[propertyMeta]))
@@ -256,7 +249,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             )
         }
         val exec = AddRelations(prop.name, json.toJsonString())
-        collection.submitToKey(id, exec).await()
+        collection.submitToKey(id, exec).await<String>()
     }
 
     override suspend fun <ID : Any, E : KIEntity<ID>> removeRelations(type: KIEntityMeta, id: Any, prop: RelationProperty, entities: Collection<E>) {
@@ -271,7 +264,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             )
         }
         val exec = RemoveRelations(prop.name, json.toJsonString())
-        collection.submitToKey(id, exec).await()
+        collection.submitToKey(id, exec).toCompletableFuture().await()
     }
 
     override suspend fun <ID : Any, E : KIEntity<ID>> setRelations(type: KIEntityMeta, id: Any, prop: RelationProperty, entities: Collection<E>) {
@@ -289,8 +282,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         collection.submitToKey(id, exec).await()
     }
 
-    @UnstableDefault
-    @ImplicitReflectionSerializer
+    @InternalSerializationApi
     override fun <ID : Any, E : KIEntity<ID>> getRelations(type: KIEntityMeta, id: Any, prop: RelationProperty): Try<Flow<E>> = run {
         val collection = collection(type)
 
@@ -298,12 +290,12 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
 
         flow {
             val serialiser = prop.contained.idType.serializer()
-            val out = collection.submitToKey(id, exec).await() as? HazelcastJsonValue
-            val json = com.hazelcast.internal.json.Json.parse(out.toString()).asArray()
+            val out = collection.submitToKey(id, exec).toCompletableFuture().await()
+            val json = com.hazelcast.internal.json.Json.parse(out).asArray()
 
             log.trace { "json array: ${json.toList()}" }
             @Suppress("UNCHECKED_CAST")
-            val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID }.filterNotNull()
+            val ids = json.mapNotNull { Json.decodeFromString(serialiser, it.asObject().get("toId").toString()) as? ID }
             log.trace { "retrieve ${prop.contained} with ids $ids" }
             retrieve<ID, E>(prop.contained, ids).getOrElse { throw it }.map {
                 log.trace { "getRelations emits $it" }
@@ -312,12 +304,12 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
         }
 
         val serialiser = prop.contained.idType.serializer()
-        val out = runBlocking { collection.submitToKey(id, exec).await() as? HazelcastJsonValue }
+        val out = runBlocking { collection.submitToKey(id, exec).await()}
         val json = com.hazelcast.internal.json.Json.parse(out.toString()).asArray()
 
         log.trace { "json array: ${json.toList()}" }
         @Suppress("UNCHECKED_CAST")
-        val ids = json.map { Json.parse(serialiser, it.asObject().get("toId").toString()) as? ID }.filterNotNull()
+        val ids = json.mapNotNull { Json.decodeFromString(serialiser, it.asObject().get("toId").toString()) as? ID }
         log.trace { "retrieve ${prop.contained} with ids $ids" }
         retrieve<ID, E>(prop.contained, ids)
     }
@@ -336,7 +328,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             )
         }
         val exec = AddIncomingRelations(relations.first().relation.name, json.toJsonString())
-        collection.submitToKey(id, exec).await()
+        collection.submitToKey(id, exec).toCompletableFuture().await()
     }
 
     override suspend fun setIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
@@ -352,7 +344,7 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             )
         }
         val exec = SetIncomingRelations(relations.first().relation.name, json.toJsonString())
-        collection.submitToKey(id, exec).await()
+        collection.submitToKey(id, exec).toCompletableFuture().await()
     }
 
     override suspend fun removeIncomingRelations(id: Any, relations: Collection<RelationFrom>) {
@@ -368,16 +360,16 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             )
         }
         val exec = RemoveRelations(relations.first().relation.name, json.toJsonString())
-        collection.submitToKey(id, exec).await()
+        collection.submitToKey(id, exec).toCompletableFuture().await()
     }
 
     override fun <ID : Any, E : KIEntity<ID>> query(f: FilterWrapper<ID, E>): Try<Flow<E>> = Try {
         val collection = collection(f.meta)
 
-        val typePredicate = Predicates.equal("$METAINFO_TYPES[any]", f.meta.name)
-        val predicate = Predicates.and(typePredicate, f.predicate)
+        val typePredicate = equal<Any,HazelcastJsonValue>("$METAINFO_TYPES[any]", f.meta.name)
+        val predicate = and<Any,HazelcastJsonValue>(typePredicate, f.predicate)
         log.debug { "query ${collection.name} predicate: $predicate" }
-        flow<E> {
+        flow {
             collection.executeOnEntries(RetrieveType(), predicate).forEach {
                 val meta = metas.getOrElse(it.value.toString()) {
                     throw DatastoreException(this@HazelcastDatastore, "unknown meta ${it.value} where type of returned object is ${it.value::class}")
@@ -394,33 +386,22 @@ class HazelcastDatastore(cfg: HazelcastConfig, events: EventManager) : AbstractD
             when (this) {
                 is FilterWrapper<*, *> -> f.predicate
                 is LogicalFilter<*, *> -> when (this) {
-                    is AndFilter<*, *> -> Predicates.and(*content.map { it.predicate }.toTypedArray()) as Predicate<String, Any?>
-                    is OrFilter<*, *> -> Predicates.or(*content.map { it.predicate }.toTypedArray()) as Predicate<String, Any?>
+                    is AndFilter<*, *> -> and<Any,HazelcastJsonValue>(*content.map { it.predicate }.toTypedArray()) as Predicate<String, Any?>
+                    is OrFilter<*, *> -> or<Any,HazelcastJsonValue>(*content.map { it.predicate }.toTypedArray()) as Predicate<String, Any?>
                 }
-                is AllFilter<*, *> -> Predicates.alwaysTrue()
-                is NoneFilter<*, *> -> Predicates.alwaysFalse()
+                is AllFilter<*, *> -> alwaysTrue()
+                is NoneFilter<*, *> -> alwaysFalse()
                 is PropertyFilter<*, *, *> -> when (this) {
                     is ComparisonFilter<*, *, *> -> when (this) {
                         is GTFilter<*, *, *> ->
-                            Predicates.greaterThan(prop.name, value) as Predicate<String, Any?>
-                        is LTFilter<*, *, *> -> Predicates.lessThan(prop.name, value) as Predicate<String, Any?>
+                            greaterThan<Any,HazelcastJsonValue>(prop.name, value) as Predicate<String, Any?>
+                        is LTFilter<*, *, *> -> lessThan<Any,HazelcastJsonValue>(prop.name, value) as Predicate<String, Any?>
                     }
                     is RelationFilter<*,*,*,*> -> DONTDOTHIS()
                 }
             }
         }
 
-    private suspend fun <V> ICompletableFuture<V>.await(): V = suspendCoroutine {
-        andThen(object : ExecutionCallback<V> {
-            override fun onFailure(t: Throwable?) {
-                it.resumeWithException(t ?: IllegalStateException())
-            }
-
-            override fun onResponse(response: V) {
-                it.resume(response)
-            }
-        })
-    }
 
     companion object {
         const val METAINFO: String = "_metaInfo"

@@ -4,7 +4,7 @@ import com.github.dockerjava.api.command.DockerCmdExecFactory
 import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import info.kinterest.docker.client.DockerClientConfigProvider
-import io.kotlintest.specs.FreeSpec
+import io.kotest.core.spec.style.FreeSpec
 import mu.KotlinLogging
 
 class MongoClusterSpec() : FreeSpec({

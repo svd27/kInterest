@@ -5,10 +5,10 @@ import com.hazelcast.internal.json.Json
 import com.hazelcast.internal.json.JsonArray
 import com.hazelcast.internal.json.JsonObject
 import com.hazelcast.internal.json.WriterConfig
-import com.hazelcast.map.AbstractEntryProcessor
+import com.hazelcast.map.EntryProcessor
 
-class FieldsSetter(private val settersJson: String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
-    override fun process(entry: Map.Entry<Any, HazelcastJsonValue>): Any {
+class FieldsSetter(private val settersJson: String) : EntryProcessor<Any, HazelcastJsonValue,String> {
+    override fun process(entry: Map.Entry<Any, HazelcastJsonValue>): String {
         val inJson = Json.parse(settersJson).asObject()
         val json = Json.parse(entry.value.toString()).asObject()
         val res = JsonObject()
@@ -22,8 +22,8 @@ class FieldsSetter(private val settersJson: String) : AbstractEntryProcessor<Any
     }
 }
 
-class FieldsGetter(private val getters: Set<String>) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
-    override fun process(entry: Map.Entry<Any, HazelcastJsonValue>): Any {
+class FieldsGetter(private val getters: Set<String>) : EntryProcessor<Any, HazelcastJsonValue,String> {
+    override fun process(entry: Map.Entry<Any, HazelcastJsonValue>): String {
         val json = Json.parse(entry.value.toString()).asObject()
         val res = JsonObject()
         getters.forEach { json.get(it)?.let { v -> res.set(it, v) }?:res.set(it, Json.NULL) }
@@ -31,20 +31,24 @@ class FieldsGetter(private val getters: Set<String>) : AbstractEntryProcessor<An
     }
 }
 
-class AddRelations(private val relation: String, private val inJson:String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
-    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
+
+class AddRelations(private val relation: String, private val inJson:String) : EntryProcessor<Any, HazelcastJsonValue,String> {
+    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): String {
         val input = Json.parse(inJson).asArray()
         val json = Json.parse(entry.value.toString()).asObject()
-        val outgoing = json.get(METAINFO).asObject().get(RELATIONSKEY).asObject().get(OUTGOING).asObject()
+        val outgoing = json.getOrSet(METAINFO).getOrSet(RELATIONSKEY).getOrSet(OUTGOING)
         val relArr = outgoing.get(relation)?.asArray() ?: JsonArray()
+        val resArr = JsonArray()
         input.forEach {el ->
-            if(el !in relArr)
-              relArr.add(el)
+            if(el !in relArr) {
+                relArr.add(el)
+                resArr.add(el)
+            }
         }
         outgoing.set(relation, relArr)
         entry.setValue(HazelcastJsonValue(json.toString()))
 
-        return ""
+        return resArr.toString(WriterConfig.MINIMAL)
     }
 
     val METAINFO: String = "_metaInfo"
@@ -53,7 +57,7 @@ class AddRelations(private val relation: String, private val inJson:String) : Ab
     val INCOMING = "incoming"
 }
 
-class SetRelations(private val relation: String, private val inJson:String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
+class SetRelations(private val relation: String, private val inJson:String) : EntryProcessor<Any, HazelcastJsonValue,Any> {
     override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
         val input = Json.parse(inJson).asArray()
         val json = Json.parse(entry.value.toString()).asObject()
@@ -62,7 +66,7 @@ class SetRelations(private val relation: String, private val inJson:String) : Ab
         outgoing.set(relation, input)
         entry.setValue(HazelcastJsonValue(json.toString()))
 
-        return ""
+        return outgoing.get(relation).toString(WriterConfig.MINIMAL)
     }
 
 
@@ -73,21 +77,25 @@ class SetRelations(private val relation: String, private val inJson:String) : Ab
 }
 
 
-class RemoveRelations(private val relation: String, private val inJson:String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
-    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
+class RemoveRelations(private val relation: String, private val inJson:String) : EntryProcessor<Any, HazelcastJsonValue,String> {
+    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): String {
         val input = Json.parse(inJson).asArray().map { it.asObject().get("toId") to it.asObject().get("toType") }
         val json = Json.parse(entry.value.toString()).asObject()
         val outgoing = json.get(METAINFO).asObject().get(RELATIONSKEY).asObject().get(OUTGOING).asObject()
         val rels = outgoing.get(relation).asArray()
+        val resArr = JsonArray()
         for(v in input) {
             val idx = rels.indexOfFirst { it.asObject().get("toId") ==  v.first && it.asObject().get("toType") == v.second}
-            if(idx>= 0) rels.remove(idx)
+            if(idx>= 0) {
+                resArr.add(JsonObject().apply { set("toId", v.first); set("toType", v.second) })
+                rels.remove(idx)
+            }
         }
         outgoing.set(relation, rels)
 
         entry.setValue(HazelcastJsonValue(json.toString()))
 
-        return ""
+        return resArr.toString(WriterConfig.MINIMAL)
     }
 
     val METAINFO: String = "_metaInfo"
@@ -96,12 +104,16 @@ class RemoveRelations(private val relation: String, private val inJson:String) :
     val INCOMING = "incoming"
 }
 
-class GetRelations(private val relation: String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
-    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
+fun JsonObject.getOrSet(name:String) : JsonObject = if(get(name)!=null) get(name).asObject() else {
+    JsonObject().also { set(name, it) }
+}
+
+class GetRelations(private val relation: String) : EntryProcessor<Any, HazelcastJsonValue,String> {
+    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): String {
         val json = Json.parse(entry.value.toString()).asObject()
-        val outgoing = json.get(METAINFO).asObject().get(RELATIONSKEY).asObject().get(OUTGOING).asObject()
-        val arr = outgoing.get(relation)
-        return HazelcastJsonValue(arr.toString())
+        val outgoing = json.getOrSet(METAINFO).getOrSet(RELATIONSKEY).getOrSet(OUTGOING)
+        val arr = outgoing.get(relation)?.asArray()?: JsonArray()
+        return arr.toString(WriterConfig.MINIMAL)
     }
 
     val METAINFO: String = "_metaInfo"
@@ -110,15 +122,16 @@ class GetRelations(private val relation: String) : AbstractEntryProcessor<Any, H
     val INCOMING = "incoming"
 }
 
-class AddIncomingRelations(private val relation: String, private val inJson:String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
-    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
+class AddIncomingRelations(private val relation: String, private val inJson:String) : EntryProcessor<Any, HazelcastJsonValue,String> {
+    override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): String {
         val input = Json.parse(inJson).asArray()
         val json = Json.parse(entry.value.toString()).asObject()
-        val incoming = json.get(METAINFO).asObject().get(RELATIONSKEY).asObject().get(INCOMING).asObject()
+        val incoming = json.getOrSet(METAINFO).getOrSet(RELATIONSKEY).getOrSet(INCOMING)
         val relArr = incoming.get(relation)?.asArray() ?: JsonArray()
         input.forEach {el ->
-            if(el !in relArr)
-              relArr.add(el)
+            if(el !in relArr) {
+                relArr.add(el)
+            }
         }
         incoming.set(relation, relArr)
         entry.setValue(HazelcastJsonValue(json.toString()))
@@ -132,7 +145,7 @@ class AddIncomingRelations(private val relation: String, private val inJson:Stri
     val INCOMING = "incoming"
 }
 
-class SetIncomingRelations(private val relation: String, private val inJson:String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
+class SetIncomingRelations(private val relation: String, private val inJson:String) : EntryProcessor<Any, HazelcastJsonValue,Any> {
     override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
         val input = Json.parse(inJson).asArray()
         val json = Json.parse(entry.value.toString()).asObject()
@@ -150,7 +163,7 @@ class SetIncomingRelations(private val relation: String, private val inJson:Stri
     val INCOMING = "incoming"
 }
 
-class RemoveIncomingRelations(private val relation: String, private val inJson:String) : AbstractEntryProcessor<Any, HazelcastJsonValue>() {
+class RemoveIncomingRelations(private val relation: String, private val inJson:String) : EntryProcessor<Any, HazelcastJsonValue,Any> {
     override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any {
         val input = Json.parse(inJson).asArray().map { it.asObject().get("toId") to it.asObject().get("toType") }
         val json = Json.parse(entry.value.toString()).asObject()
@@ -175,7 +188,7 @@ class RemoveIncomingRelations(private val relation: String, private val inJson:S
 
 
 
-class RetrieveType() : AbstractEntryProcessor<Any,HazelcastJsonValue>() {
+class RetrieveType() : EntryProcessor<Any,HazelcastJsonValue,Any> {
     override fun process(entry: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Any? {
         @Suppress("SENSELESS_COMPARISON")
         if(entry.value!= null) {

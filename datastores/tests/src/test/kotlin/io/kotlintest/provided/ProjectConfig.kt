@@ -5,11 +5,12 @@ import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.datastores.tests.ProjectScope
 import info.kinterest.datastores.tests.SpecScope
 import info.kinterest.datastores.tests.TestScope
-import io.kotlintest.AbstractProjectConfig
-import io.kotlintest.Spec
-import io.kotlintest.TestCase
-import io.kotlintest.TestResult
-import io.kotlintest.extensions.TestListener
+import io.kotest.core.config.AbstractProjectConfig
+import io.kotest.core.listeners.Listener
+import io.kotest.core.listeners.TestListener
+import io.kotest.core.spec.Spec
+import io.kotest.core.test.TestCase
+import io.kotest.core.test.TestResult
 import mu.KotlinLogging
 import kotlin.math.max
 
@@ -17,7 +18,7 @@ object ProjectConfig : AbstractProjectConfig() {
     val datastores : List<String> = listOf(HazelcastConfig.TYPE, MongodatastoreConfig.TYPE)
     private val log = KotlinLogging.logger { }
 
-    override fun parallelism(): Int = max(Runtime.getRuntime().availableProcessors() / 2, 1)
+    override val parallelism: Int = max(Runtime.getRuntime().availableProcessors() / 2, 1)
 
     init {
         log.info { "TMPDIR: ${System.getProperty("java.io.tmpdir")}" }
@@ -35,24 +36,24 @@ object ProjectConfig : AbstractProjectConfig() {
         ProjectScope.getRegistry(this)
     }
 
-    override fun listeners(): List<TestListener> {
+    override fun listeners(): List<Listener> {
         return super.listeners()+object : TestListener {
-            override fun beforeSpec(spec: Spec) {
+            override suspend fun beforeSpec(spec: Spec) {
                 log.info { "opening Spec scope for $spec" }
                 SpecScope.getRegistry(spec)
             }
 
-            override fun afterSpec(spec: Spec) {
+            override suspend fun afterSpec(spec: Spec) {
                 log.info { "closing Spec scope for $spec" }
                 SpecScope.getRegistry(spec).close()
             }
 
-            override fun beforeTest(testCase: TestCase) {
+            override suspend fun beforeTest(testCase: TestCase) {
                 log.info { "opening Test scope for $testCase" }
                 TestScope.getRegistry(testCase)
             }
 
-            override fun afterTest(testCase: TestCase, result: TestResult) {
+            override suspend fun afterTest(testCase: TestCase, result: TestResult) {
                 log.info { "closing Test scope for $testCase" }
                 TestScope.getRegistry(testCase).close()
             }

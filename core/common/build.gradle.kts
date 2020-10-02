@@ -2,12 +2,13 @@
 
 plugins {
     kotlin("multiplatform")
-    id("org.jetbrains.kotlin.plugin.serialization")
+    kotlin("plugin.serialization")
 }
 
 val coroutinesVersion: String by project
 val kodeinVersion: String by project
 val kotlinSerializationVersion : String by project
+val koTestVersion : String by project
 
 kotlin {
     sourceSets {
@@ -15,8 +16,8 @@ kotlin {
             dependencies {
                 implementation(kotlin("stdlib-common"))
                 implementation("io.github.microutils:kotlin-logging-common:1.7.6")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-common:$coroutinesVersion")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime-common:$kotlinSerializationVersion")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinSerializationVersion")
             }
         }
         val commonTest by getting {
@@ -33,10 +34,9 @@ kotlin {
         dependencies {
             implementation(kotlin("stdlib-jdk8"))
             implementation(kotlin("reflect"))
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime:$kotlinSerializationVersion")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:$coroutinesVersion")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$coroutinesVersion")
-            implementation("org.kodein.di:kodein-di-generic-jvm:$kodeinVersion")
+            implementation("org.kodein.di:kodein-di:$kodeinVersion")
             implementation("org.kodein.di:kodein-di-conf-jvm:$kodeinVersion")
             implementation("io.github.microutils:kotlin-logging:1.7.6")
             implementation("ch.qos.logback:logback-classic:1.2.3")
@@ -47,14 +47,18 @@ kotlin {
     jvm().compilations["test"].defaultSourceSet {
         dependencies {
             implementation(kotlin("test-junit5"))
+            implementation("io.kotest:kotest-runner-junit5:$koTestVersion")
+            implementation("io.kotest:kotest-assertions-core:$koTestVersion")
+            implementation("io.kotest:kotest-property:$koTestVersion")
         }
     }
 
+    js {
+        browser()
+    }
     js().compilations["main"].defaultSourceSet {
         dependencies {
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$kotlinSerializationVersion")
             implementation(kotlin("stdlib-js"))
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:$coroutinesVersion")
             implementation("io.github.microutils:kotlin-logging-js:1.7.6")
         }
     }

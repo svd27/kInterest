@@ -14,9 +14,9 @@ include("datastores", "datastores:mongo", "datastores:hazelcast", "datastores:ha
 include("docker:docker-client")
 
 
-val kotlinVersion: String by settings
 
 pluginManagement {
+    val kotlinVersion: String by settings
     resolutionStrategy {
         eachPlugin {
             when (requested.id.id) {

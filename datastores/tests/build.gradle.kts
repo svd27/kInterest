@@ -13,12 +13,12 @@ configurations.all {
 val coroutinesVersion: String by project
 val striktVersion: String by project
 val kotlinSerializationVersion : String by project
+val koTestVersion : String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation(project(":core:annotations"))
     implementation(project(":core:common"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime:$kotlinSerializationVersion")
     testImplementation(kotlin("test-junit5"))
     kaptTest(project(":core:generator", "default"))
     implementation(project(":datastores:mongo", "default"))
@@ -26,7 +26,9 @@ dependencies {
     testImplementation(project(":datastores:hazelcast:jet", "default"))
     testImplementation(project(":docker:docker-client", "default"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
-    testImplementation("io.kotlintest:kotlintest-runner-junit5:3.4.2")
+    testImplementation("io.kotest:kotest-runner-junit5:$koTestVersion")
+    testImplementation("io.kotest:kotest-assertions-core:$koTestVersion")
+    testImplementation("io.kotest:kotest-property:$koTestVersion")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {

@@ -15,7 +15,7 @@ val coroutinesVersion : String by project
 val striktVersion : String by project
 val hazelcastVersion : String by project
 
-val kotlinTestVersion : String by project
+val koTestVersion : String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
@@ -31,7 +31,7 @@ dependencies {
 
     implementation("io.github.microutils:kotlin-logging:1.7.6")
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("com.github.docker-java:docker-java:3.2.0-rc1")
+    implementation("com.github.docker-java:docker-java:3.2.5")
     testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
@@ -42,8 +42,10 @@ dependencies {
     testImplementation("io.strikt:strikt-java-time")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
     testImplementation("org.mongodb:mongodb-driver-reactivestreams:1.12.0")
-    testImplementation("com.hazelcast:hazelcast-client:$hazelcastVersion")
-    testImplementation("io.kotlintest:kotlintest-runner-junit5:$kotlinTestVersion")
+    testImplementation("com.hazelcast:hazelcast:$hazelcastVersion")
+    testImplementation("io.kotest:kotest-runner-junit5-jvm:$koTestVersion")
+    testImplementation("io.kotest:kotest-assertions-core-jvm:$koTestVersion")
+    testImplementation("io.kotest:kotest-property-jvm:$koTestVersion")
 }
 
 tasks {

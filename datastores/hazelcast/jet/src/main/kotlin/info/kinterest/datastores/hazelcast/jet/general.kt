@@ -1,19 +1,33 @@
 package info.kinterest.datastores.hazelcast.jet
 
 import com.hazelcast.core.HazelcastJsonValue
+import com.hazelcast.function.BiConsumerEx
+import com.hazelcast.function.ComparatorEx
+import com.hazelcast.function.FunctionEx
+import com.hazelcast.function.SupplierEx
 import com.hazelcast.internal.json.Json
 import com.hazelcast.internal.json.JsonValue
 import com.hazelcast.jet.aggregate.AggregateOperation
 import com.hazelcast.jet.aggregate.AggregateOperation1
 import com.hazelcast.jet.datamodel.Tuple3
-import com.hazelcast.jet.function.BiConsumerEx
-import com.hazelcast.jet.function.ComparatorEx
-import com.hazelcast.jet.function.FunctionEx
-import com.hazelcast.jet.function.SupplierEx
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
 import com.hazelcast.nio.serialization.DataSerializable
+import com.hazelcast.projection.Projection
 import java.io.Serializable
+
+class FieldProjection(val fields: Set<String>) : Projection<MutableMap.MutableEntry<Any, HazelcastJsonValue>, Tuple3<Any, String, Map<String, JsonValue>>> {
+    override fun transform(input: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Tuple3<Any, String, Map<String, JsonValue>> = run {
+        val json = Json.parse(input.value.toString()).asObject()
+        Tuple3.tuple3(input.key, json.get(FieldExtractor.METAINFO).asObject().getString(FieldExtractor.METAINFO_TYPE, ""), fields.map { it to json.get(it) }.toMap())
+    }
+
+    companion object {
+        const val METAINFO: String = "_metaInfo"
+        const val METAINFO_TYPE: String = "type"
+        const val METAINFO_TYPES: String = "types"
+    }
+}
 
 class FieldExtractor(val fields: Set<String>) : FunctionEx<MutableMap.MutableEntry<Any, HazelcastJsonValue>, Tuple3<Any, String, Map<String, JsonValue>>> {
     override fun applyEx(t: MutableMap.MutableEntry<Any, HazelcastJsonValue>): Tuple3<Any, String, Map<String, JsonValue>> = run {

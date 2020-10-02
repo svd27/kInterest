@@ -15,17 +15,16 @@ import info.kinterest.datastores.mongo.MongodatastoreConfig
 import info.kinterest.docker.client.DockerClientConfigProvider
 import info.kinterest.docker.hazelcast.jet.HazelcastJetCluster
 import info.kinterest.docker.mongo.MongoCluster
-import io.kotlintest.Spec
-import io.kotlintest.TestCase
+import io.kotest.core.spec.Spec
+import io.kotest.core.test.TestCase
 import io.kotlintest.provided.ProjectConfig
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KotlinLogging
-import org.kodein.di.Kodein
+import org.kodein.di.*
 import org.kodein.di.bindings.Scope
 import org.kodein.di.bindings.ScopeCloseable
 import org.kodein.di.bindings.ScopeRegistry
 import org.kodein.di.bindings.StandardScopeRegistry
-import org.kodein.di.generic.*
 import java.time.Duration
 
 interface KodeinCloseable<T> : ScopeCloseable {
@@ -36,7 +35,7 @@ interface KodeinCloseable<T> : ScopeCloseable {
 
 
 @ExperimentalCoroutinesApi
-val kodeinMongo = Kodein.Module(name = "mongo") {
+val kodeinMongo = DI.Module(name = "mongo") {
     val log = KotlinLogging.logger { }
     bind<MongoCluster>() with scoped(ProjectScope).singleton {
         MongoCluster(instance(), duration = Duration.ofSeconds(30)).apply {
@@ -59,7 +58,7 @@ val kodeinMongo = Kodein.Module(name = "mongo") {
 
 
 @ExperimentalCoroutinesApi
-val kodeinHazelcast = Kodein.Module("hazelcast") {
+val kodeinHazelcast = DI.Module("hazelcast") {
     bind<HazelcastJetCluster>() with scoped(ProjectScope).singleton {
         HazelcastJetCluster(instance(), Duration.ofSeconds(30)).apply { start() }
     }
@@ -78,14 +77,14 @@ val kodeinHazelcast = Kodein.Module("hazelcast") {
     }
 }
 
+data class DataStoreTypeAndName(val type:String, val name:String)
+
 @ExperimentalCoroutinesApi
-val kodeinTest : Kodein = Kodein {
+val kodeinTest : DI = DI {
     val log = KotlinLogging.logger {  }
     import(kodeinDatastores)
     import(kodeinMongo)
     import(kodeinHazelcast)
-    //val dh = System.getenv("DOCKER_HOST")
-    log.info { System.getenv() }
     bind<DockerClient>() with scoped(ProjectScope).singleton {
         val cmds: DockerCmdExecFactory = NettyDockerCmdExecFactory()
         val cfg = DockerClientConfigProvider.config()
@@ -100,18 +99,18 @@ val kodeinTest : Kodein = Kodein {
         }
     }
 
-    bind<Datastore>() with scoped(ProjectScope).multiton { type: String, name: String ->
-        when (type) {
-            MongodatastoreConfig.TYPE -> factory<String,MongoDatastore>()(name)
-            HazelcastConfig.TYPE -> factory<String,HazelcastDatastore>()(name)
+    bind<Datastore>() with scoped(ProjectScope).multiton { tn : DataStoreTypeAndName ->
+        when (tn.type) {
+            MongodatastoreConfig.TYPE -> factory<String,MongoDatastore>()(tn.name)
+            HazelcastConfig.TYPE -> factory<String,HazelcastDatastore>()(tn.name)
             else -> DONTDOTHIS()
-        } as Datastore
+        }
     }
 
-    bind<DatastoreConfig>() with scoped(ProjectScope).multiton { type: String, name: String ->
-        when (type) {
-            MongodatastoreConfig.TYPE -> factory<String,MongodatastoreConfig>()(name)
-            HazelcastConfig.TYPE -> factory<String,HazelcastConfig>()(name)
+    bind<DatastoreConfig>() with scoped(ProjectScope).multiton { tn : DataStoreTypeAndName ->
+        when (tn.type) {
+            MongodatastoreConfig.TYPE -> factory<String,MongodatastoreConfig>()(tn.name)
+            HazelcastConfig.TYPE -> factory<String,HazelcastConfig>()(tn.name)
             else -> DONTDOTHIS()
         }
     }

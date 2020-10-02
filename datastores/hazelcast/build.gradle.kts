@@ -18,7 +18,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":datastores:hazelcast:jet", "default"))
     implementation("org.mongodb:mongodb-driver-reactivestreams:1.12.0")
-    implementation("com.hazelcast:hazelcast-client:$hazelcastVersion")
+    implementation("com.hazelcast:hazelcast:$hazelcastVersion")
     implementation("com.hazelcast.jet:hazelcast-jet:$hazelcastJetVersion")
     implementation(project(":datastores", "default"))
     testImplementation(kotlin("test-junit5"))

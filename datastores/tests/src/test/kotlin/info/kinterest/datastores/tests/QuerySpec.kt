@@ -8,27 +8,25 @@ import info.kinterest.filter.filter
 import info.kinterest.projection.EntityProjection
 import info.kinterest.projection.ParentProjection
 import info.kinterest.projection.paging.Paging
-import io.kotlintest.forAll
+import io.kotest.core.spec.style.FreeSpec
 import io.kotlintest.provided.ProjectConfig
-import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import org.kodein.di.Kodein
-import org.kodein.di.generic.M
-import org.kodein.di.generic.instance
-import org.kodein.di.generic.on
+import org.kodein.di.DI
+import org.kodein.di.instance
+import org.kodein.di.on
 
 @ExperimentalCoroutinesApi
 class QuerySpec : FreeSpec({
-    val kodein = Kodein {
+    val kodein = DI {
         extend(kodeinTest)
     }
     val spec = this
 
 
-    forAll(ProjectConfig.datastores) {
+    ProjectConfig.datastores.forEach {
         which ->
         "!given a datastore $which" - {
-            val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "${spec::class.simpleName}${which}ds1"))
+            val ds: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "${spec::class.simpleName}${which}ds1"))
             "some entities" - {
                 val employees = List(100) {
                     EmployeeTransient(salary = it, name = "name$it", first = "first$it", age = it, someLong = if(it%2==0) 1L else 11L)

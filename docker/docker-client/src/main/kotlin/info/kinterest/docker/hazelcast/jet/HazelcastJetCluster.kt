@@ -1,10 +1,6 @@
 package info.kinterest.docker.hazelcast.jet
 
 import com.github.dockerjava.api.DockerClient
-import com.github.dockerjava.api.model.ExposedPort
-import com.github.dockerjava.api.model.ExposedPorts
-import com.github.dockerjava.api.model.PortBinding
-import com.github.dockerjava.api.model.Ports
 import info.kinterest.docker.client.BaseContainer
 import info.kinterest.docker.client.LogAcceptor
 import info.kinterest.docker.client.LogWaitStrategy
@@ -62,8 +58,9 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
                     ),
                     binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster-jet.xml")),
                             "/opt/hazelcast-libs" to listOf(javaClass.classLoader.getResource("jet-fat.jar"))),
-                    exposedPorts = ExposedPorts(ExposedPort(port)),
-                    portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"), ExposedPort(5701)))) to (port)
+                    //exposedPorts = ExposedPorts(ExposedPort(port)),
+                    //portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"),  ExposedPort(5701)))
+            ) to (port)
 
         }
 

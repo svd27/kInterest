@@ -3,32 +3,31 @@ package info.kinterest.datastores.tests
 import info.kinterest.datastore.Datastore
 import info.kinterest.datastores.tests.jvm.PersonTransient
 import info.kinterest.functional.getOrElse
-import io.kotlintest.forAll
-import io.kotlintest.matchers.collections.shouldContain
-import io.kotlintest.matchers.collections.shouldHaveSize
-import io.kotlintest.matchers.types.shouldBeInstanceOf
-import io.kotlintest.matchers.types.shouldBeNull
+import io.kotest.core.spec.style.FreeSpec
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.provided.ProjectConfig
-import io.kotlintest.shouldBe
-import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.kodein.di.Kodein
-import org.kodein.di.generic.M
-import org.kodein.di.generic.instance
-import org.kodein.di.generic.on
+import org.kodein.di.DI
+import org.kodein.di.instance
+import org.kodein.di.on
 
 @ExperimentalCoroutinesApi
 class CrudSpec : FreeSpec({
-    val kodein = Kodein {
+    val kodein = DI {
         extend(kodeinTest)
     }
 
-    forAll(ProjectConfig.datastores) { which ->
+    ProjectConfig.datastores.forEach {
+        which : String ->
         "given a datastore $which" - {
-            val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "ds1"))
+            val ds: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "ds1"))
             runBlocking { ds.register(info.kinterest.datastores.tests.jvm.PersonJvm) }
             "inserting an entity" - {
                 val pt = PersonTransient(null, "sasa", "djuric", 4L)
@@ -56,7 +55,7 @@ class CrudSpec : FreeSpec({
                 }
             }
             "given an entity" - {
-                val datastore: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "dsdel1"))
+                val datastore: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "dsdel1"))
                 runBlocking { datastore.register(info.kinterest.datastores.tests.jvm.PersonJvm) }
 
                 val pt = PersonTransient(mutableMapOf<String, Any?>("name" to "djuric", "first" to "sasa"))

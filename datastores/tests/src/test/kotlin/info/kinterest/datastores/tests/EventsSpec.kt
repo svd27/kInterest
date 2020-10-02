@@ -7,34 +7,32 @@ import info.kinterest.datastore.Datastore
 import info.kinterest.datastore.EventManager
 import info.kinterest.datastores.tests.jvm.PersonJvm
 import info.kinterest.datastores.tests.jvm.PersonTransient
-import io.kotlintest.forAll
-import io.kotlintest.matchers.asClue
-import io.kotlintest.matchers.collections.shouldBeEmpty
-import io.kotlintest.matchers.collections.shouldContain
-import io.kotlintest.matchers.collections.shouldContainExactly
-import io.kotlintest.matchers.collections.shouldHaveSize
-import io.kotlintest.matchers.types.shouldBeInstanceOf
+import io.kotest.assertions.asClue
+import io.kotest.core.spec.style.FreeSpec
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.provided.ProjectConfig
-import io.kotlintest.shouldBe
-import io.kotlintest.specs.FreeSpec
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import mu.KotlinLogging
-import org.kodein.di.Kodein
-import org.kodein.di.generic.M
-import org.kodein.di.generic.instance
-import org.kodein.di.generic.on
+import org.kodein.di.DI
+import org.kodein.di.instance
+import org.kodein.di.on
 
 @ExperimentalCoroutinesApi
 class EventsSpec : FreeSpec({
     val log = KotlinLogging.logger { }
-    val kodein = Kodein {
+    val kodein = DI {
         extend(kodeinTest)
     }
-    forAll(ProjectConfig.datastores) { which ->
-        val ds: Datastore by kodein.on(ProjectConfig).instance(arg = M(which, "evtsds1"))
-        val evMgr: EventManager by kodein.instance()
+    ProjectConfig.datastores.forEach { which ->
+        val ds: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "evtsds1"))
+        val evMgr: EventManager by kodein.instance<EventManager>()
         "given a datastore($which)" - {
             val channelListener = ChannelListener(evMgr.listener(PersonJvm))
             "operations" - {

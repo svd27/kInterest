@@ -6,9 +6,8 @@ import com.github.dockerjava.netty.NettyDockerCmdExecFactory
 import com.hazelcast.client.HazelcastClient
 import com.hazelcast.client.config.ClientConfig
 import com.hazelcast.client.config.ClientNetworkConfig
-import com.hazelcast.config.GroupConfig
 import info.kinterest.docker.client.DockerClientConfigProvider
-import io.kotlintest.specs.FreeSpec
+import io.kotest.core.spec.style.FreeSpec
 import mu.KotlinLogging
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
@@ -29,7 +28,7 @@ class HazelcastJetClusterTest : FreeSpec({
                         ClientConfig()
                                 .setNetworkConfig(
                                         ClientNetworkConfig().setAddresses(jet.ips).setSmartRouting(false)
-                                ).setGroupConfig(GroupConfig("jet"))
+                                )
                 )
                 hzcl.distributedObjects.forEach { log.debug { "distributed object $it" } }
                 "and access the cpSubsystem" - {

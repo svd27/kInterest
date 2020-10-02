@@ -8,6 +8,7 @@ configurations.all {
 }
 
 val spekVersion : String by project
+val koTestVersion : String by project
 
 dependencies {
     implementation(kotlin("stdlib"))
@@ -24,8 +25,8 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.5.2")
     testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
+
     kapt("com.google.auto.service:auto-service:1.0-rc6")
-    testImplementation("io.kotlintest:kotlintest-runner-junit5:3.4.2")
     testImplementation(platform("io.strikt:strikt-bom:0.22.2"))
 
     // Versions can be omitted as they are supplied by the BOM
