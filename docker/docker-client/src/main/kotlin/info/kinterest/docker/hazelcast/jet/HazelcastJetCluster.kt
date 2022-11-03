@@ -1,6 +1,10 @@
 package info.kinterest.docker.hazelcast.jet
 
 import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.model.ExposedPort
+import com.github.dockerjava.api.model.ExposedPorts
+import com.github.dockerjava.api.model.PortBinding
+import com.github.dockerjava.api.model.Ports
 import info.kinterest.docker.client.BaseContainer
 import info.kinterest.docker.client.LogAcceptor
 import info.kinterest.docker.client.LogWaitStrategy
@@ -31,7 +35,7 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
         log.info { this::class.java.classLoader.getResources("hazelcast/server/libs").toList().map { it.toURI() } }
         val rnd = Random(System.currentTimeMillis())
         val nwname = "hccpnw${rnd.nextInt(99999)}"
-        val nw = client.createNetworkCmd().withDriver("bridge").withName(nwname).exec().id
+        //val nw = client.createNetworkCmd().withDriver("bridge").withName(nwname).exec().id
         val conts = mutableMapOf<BaseContainer, Int>()
         Runtime.getRuntime().addShutdownHook(Thread(object : Runnable {
             override fun run() {
@@ -41,7 +45,7 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
                         it.key.stopContainer()
                     }
                 }
-                Try { client.removeNetworkCmd(nw).exec() }.fold({ log.warn(it) { } }) { log.debug { "removed nw $nw" } }
+  //              Try { client.removeNetworkCmd(nw).exec() }.fold({ log.warn(it) { } }) { log.debug { "removed nw $nw" } }
             }
         }))
 
@@ -50,16 +54,16 @@ class HazelcastJetCluster(private val client: DockerClient, private val duration
             val port = portStart + it
 
             conts += BaseContainer(client = client, image = "hazelcast/hazelcast-jet",
-                    network = nw,
+//                    network = nw,
                     //CLASSPATH_DEFAULT
                     env = listOf(
-                            "JAVA_OPTS=-Dhazelcast.local.publicAddress=$docker_ip:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster-jet.xml",
+                            "JAVA_OPTS=-Dhazelcast.local.publicAddress=$docker_ip:$port -Dhazelcast.config=/opt/cluster/hazelcast-cluster.xml",
                             "CLASSPATH=/opt/hazelcast-libs/jet-fat.jar"
                     ),
-                    binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster-jet.xml")),
+                    binds = listOf("/opt/cluster" to listOf(javaClass.classLoader.getResource("hazelcast-cluster.xml")),
                             "/opt/hazelcast-libs" to listOf(javaClass.classLoader.getResource("jet-fat.jar"))),
-                    //exposedPorts = ExposedPorts(ExposedPort(port)),
-                    //portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"),  ExposedPort(5701)))
+                    exposedPorts = ExposedPorts(ExposedPort(port)),
+                    portBindings = listOf(PortBinding(Ports.Binding("localhost", "$port/tcp"),  ExposedPort(5701)))
             ) to (port)
 
         }

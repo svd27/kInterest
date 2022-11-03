@@ -12,7 +12,7 @@ import com.hazelcast.jet.aggregate.AggregateOperation1
 import com.hazelcast.jet.datamodel.Tuple3
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
-import com.hazelcast.nio.serialization.DataSerializable
+import com.hazelcast.nio.serialization.StreamSerializer
 import com.hazelcast.projection.Projection
 import java.io.Serializable
 
@@ -93,7 +93,7 @@ fun createPager(offset: Int, size: Int, sort: GenericComparator): AggregateOpera
 }
 
 
-class PageAggregation(var sort: GenericComparator, var page: List<Tuple3<Any, String, Map<String, JsonValue>>>, var offset: Int, var size: Int, var dropped: Int, var finished:Int) : DataSerializable {
+class PageAggregation(var sort: GenericComparator, var page: List<Tuple3<Any, String, Map<String, JsonValue>>>, var offset: Int, var size: Int, var dropped: Int, var finished:Int)  {
     constructor() : this(GenericComparator(setOf()), mutableListOf(), 0, 0, 0, 0)
 
     fun eat(pa: PageAggregation) {
@@ -115,29 +115,35 @@ class PageAggregation(var sort: GenericComparator, var page: List<Tuple3<Any, St
         page = page.take(size)
     }
 
-    override fun writeData(out: ObjectDataOutput) {
-        out.writeUTFArray(sort.fields.map { it.first }.toTypedArray())
-        out.writeUTFArray(sort.fields.map { it.second }.toTypedArray())
-        out.writeInt(page.size)
-        page.forEach {
+}
+
+class PageAggregationSerializer : StreamSerializer<PageAggregation> {
+    override fun getTypeId(): Int = 1
+
+    override fun write(out: ObjectDataOutput, agg: PageAggregation) = run {
+        out.writeUTFArray(agg.sort.fields.map { it.first }.toTypedArray())
+        out.writeUTFArray(agg.sort.fields.map { it.second }.toTypedArray())
+        out.writeInt(agg.page.size)
+        agg.page.forEach {
             out.writeObject(it.f0())
             out.writeUTF(it.f1())
             val entries = it.f2().entries.toList()
             out.writeUTFArray(entries.map { it.key }.toTypedArray())
             out.writeUTFArray(entries.map { it.value.toString() }.toTypedArray())
         }
-        out.writeInt(offset)
-        out.writeInt(size)
-        out.writeInt(dropped)
-        out.writeInt(finished)
+        out.writeInt(agg.offset)
+        out.writeInt(agg.size)
+        out.writeInt(agg.dropped)
+        out.writeInt(agg.finished)
     }
 
-    override fun readData(inp: ObjectDataInput) {
+    override fun read(inp: ObjectDataInput): PageAggregation = run {
         val names = inp.readUTFArray()
         val types = inp.readUTFArray()
-        sort = GenericComparator(names.zip(types).toSet())
+
+
         val pageSize = inp.readInt()
-        page = mutableListOf()
+        val page = mutableListOf<Tuple3<Any, String, Map<String, JsonValue>>>()
         repeat(pageSize) {
             val id = inp.readObject<Any>()
             val type = inp.readUTF()
@@ -146,10 +152,7 @@ class PageAggregation(var sort: GenericComparator, var page: List<Tuple3<Any, St
             val map = keys.zip(values).toMap()
             page += Tuple3.tuple3(id, type, map)
         }
-        offset = inp.readInt()
-        size = inp.readInt()
-        dropped = inp.readInt()
-        finished = inp.readInt()
+        PageAggregation(GenericComparator(names.zip(types).toSet()), page, inp.readInt(), inp.readInt(), inp.readInt(), inp.readInt())
     }
 }
 

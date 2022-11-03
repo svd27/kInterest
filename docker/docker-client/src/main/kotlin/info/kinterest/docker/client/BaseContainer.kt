@@ -224,6 +224,7 @@ class BaseContainer(val client: DockerClient, val image: String, val version: St
                 waitForLog(waitStrategy.acceptor, waitStrategy.duration)
                 log.debug { "done waiting" }
             }
+            else -> Unit
         }
     }
 

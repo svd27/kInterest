@@ -103,7 +103,7 @@ class SingleRelationNullablePropertyDelegate<E>(private val e: KIEntity<Any>, pr
 
     override fun setValue(thisRef: Any, property: KProperty<*>, value: E?) {
         check(thisRef is KIEntity<*>)
-        if(value==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf()) }
+        if(value==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, emptyList<KIEntity<Any>>()) }
         else runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf(value as KIEntity<Any>)) }
     }
 }
@@ -122,7 +122,7 @@ class SingleRelationPropertyDelegate<E>(private val e: KIEntity<Any>, private va
 
     override fun setValue(thisRef: Any, property: KProperty<*>, value: E) {
         check(thisRef is KIEntity<*>)
-        if(value==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf()) }
+        if(value==null) runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf<KIEntity<Any>>()) }
         else runBlocking { thisRef._store.setRelations(e._meta, e.id, prop, listOf(value as KIEntity<Any>)) }
     }
 }

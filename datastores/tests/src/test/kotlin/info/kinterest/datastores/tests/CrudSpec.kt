@@ -55,7 +55,7 @@ class CrudSpec : FreeSpec({
                 }
             }
             "given an entity" - {
-                val datastore: Datastore by kodein.on(ProjectConfig).instance<DataStoreTypeAndName,Datastore>(arg = DataStoreTypeAndName(which, "dsdel1"))
+                val datastore: Datastore by kodein.on(ProjectConfig).instance(arg = DataStoreTypeAndName(which, "dsdel1"))
                 runBlocking { datastore.register(info.kinterest.datastores.tests.jvm.PersonJvm) }
 
                 val pt = PersonTransient(mutableMapOf<String, Any?>("name" to "djuric", "first" to "sasa"))
@@ -77,7 +77,6 @@ class CrudSpec : FreeSpec({
                 "retrieving should work" - {
                     retrieved.id.shouldBe(pe.id)
                     retrieved.shouldBeInstanceOf<Person>()
-                    require(retrieved is Person)
                     retrieved.name.shouldBe(pe.name)
                 }
                 val ids = runBlocking { datastore.delete(pe).fold({ throw it }) { it } }

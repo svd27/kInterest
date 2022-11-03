@@ -17,7 +17,6 @@ dependencies {
     implementation(kotlin("reflect"))
     implementation(project(":core:annotations"))
     implementation(project(":core:common"))
-    implementation("com.hazelcast:hazelcast:$hazelcastVersion")
     implementation("com.hazelcast.jet:hazelcast-jet:$hazelcastJetVersion")
     implementation(project(":datastores", "default"))
     testImplementation(kotlin("test-junit5"))

@@ -7,8 +7,8 @@ plugins {
 
 val coroutinesVersion: String by project
 val kodeinVersion: String by project
-val kotlinSerializationVersion : String by project
 val koTestVersion : String by project
+val kotlinSerializationJson : String by project
 
 kotlin {
     sourceSets {
@@ -17,7 +17,7 @@ kotlin {
                 implementation(kotlin("stdlib-common"))
                 implementation("io.github.microutils:kotlin-logging-common:1.7.6")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinSerializationVersion")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinSerializationJson")
             }
         }
         val commonTest by getting {
